@@ -1,25 +1,14 @@
 runtime: python37
 entrypoint: python main.py
 
-###
-
+env: standard
+instance_class: F1
 handlers:
-  # This configures Google App Engine to serve the files in the app's static
-  # directory.
-#- url: static
-  #static_dir: static
-
-  # This handler routes all requests not caught above to your main app.
-  # Required when static routes are defined. 
-  # Can be omitted when there are no static files defined.
-- url: /.*
-  script: auto
-#entrypoint: gunicorn -b :$PORT main:app
-
-#handlers:
-#- url: auto  # This regex directs all routes to main.app
- # script: main.app
-#if __name__ == '__main__':
-    # This is used when running locally. Gunicorn is used to run the
-    # application on Google App Engine. See entrypoint in app.yaml.
-    #app.run(host='127.0.0.1', port=8080, debug=True)
+  - url: /.*
+    script: auto
+automatic_scaling:
+  min_idle_instances: automatic
+  max_idle_instances: automatic
+  min_pending_latency: automatic
+  max_pending_latency: automatic
+network: {}
