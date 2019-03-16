@@ -1,5 +1,6 @@
 runtime: python37
-entrypoint: gunicorn -b :$PORT main:app
+entrypoint: python main.py
+#entrypoint: gunicorn -b :$PORT main:app
 
 #handlers:
 #- url: auto  # This regex directs all routes to main.app
