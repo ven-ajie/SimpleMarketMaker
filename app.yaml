@@ -1,9 +1,9 @@
 runtime: python37
 entrypoint: gunicorn -b :$PORT main:app
 
-handlers:
-- url: .*  # This regex directs all routes to main.app
-  script: main.app
+#handlers:
+#- url: auto  # This regex directs all routes to main.app
+ # script: main.app
 #if __name__ == '__main__':
     # This is used when running locally. Gunicorn is used to run the
     # application on Google App Engine. See entrypoint in app.yaml.
