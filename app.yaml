@@ -1,5 +1,5 @@
 runtime: python37
-entrypoint: python main.py
+entrypoint: python app.py
 
 env: standard
 instance_class: F1
