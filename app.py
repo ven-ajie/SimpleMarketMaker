@@ -12,6 +12,7 @@ import argparse, logging, math, os, sys, time, traceback
 from api import RestClient
 
 
+
 # training
 KEY = '3QPFpc42ruTiM'
 SECRET = '33KMEDOQ7BAX6BVHQ35I7MBOWDZNTFU3'
@@ -79,6 +80,7 @@ VOL_PRIOR *= PCT
 
 
 class MarketMaker(object):
+
 
 	def __init__(self, monitor=True, output=True):
 		self.equity_usd = None
@@ -216,15 +218,18 @@ class MarketMaker(object):
 			posOpn      =  sum(OrderedDict({k: self.positions[k]['size'] for k in self.futures.keys()}).values())
 			posOB       = sum([o['quantity'] for o in [o for o in self.client.getopenorders() if o['direction'] == 'buy']]) - sum(
 				[o['quantity'] for o in [o for o in self.client.getopenorders() if o['direction'] == 'sell']])
+			posOBBid       = sum([o['quantity'] for o in [o for o in self.client.getopenorders() if o['direction'] == 'buy']])
+			posOBAsk       = sum([o['quantity'] for o in [o for o in self.client.getopenorders() if o['direction'] == 'sell']])
 
+                        
 			posNet      = posOB + posOpn
             # Me
 
 			nbids       = 2
 			nasks       = 2
 
-			place_bids =   posNet != 0 or posNet == 0
-			place_asks =   posNet != 0 or posNet == 0
+			place_bids =   'true'
+			place_asks =   'true'
 
 
 			print('posOpn',posOpn,'posOB',posOB, 'posNet', posNet, 'avg_price',avg_price)
@@ -276,30 +281,35 @@ class MarketMaker(object):
 				asks[0] = ticksize_ceil(asks[0], tsz)
 
 			for i in range(max(nbids, nasks)):
+				
+				time.sleep(20)
 
 				# BIDS
-				if place_bids  :
+				if place_bids:
 
 					offerOB = bid_mkt
+					avg_price2 = avg_price - (avg_price * 2 / 100)
 
-					print('BIDS',offerOB, 'posOpn', posOpn, 'posOB', posOB, 'posNet', posNet, 'avg_price', avg_price)
+					print('BIDS', offerOB, 'posOpn', posOpn, 'posOB', posOB, 'posNet', posNet, 'avg_price', avg_price,
+					      'avg_price2', avg_price2)
 
-					if posOpn == 0 :
+					if posOpn == 0:
 
-						if avg_price > 0 :
+						if avg_price > 0:
 
 							prc = 0
 
 						else:
-							prc = abs(min(bid_mkt, avg_price, avg_price-(avg_price*.005)))
-							print ("avg1",avg_price-(avg_price*.005))
-					elif avg_price == 0 and posOpn <0:
+							prc = bid_mkt
+
+					elif avg_price == 0:
 						prc = bid_mkt
 
-					elif avg_price < 0 :
-						avg_price2=-(avg_price - (avg_price * .005))
-						prc = abs(min(bid_mkt, avg_price, avg_price2))
-						print("avg2", avg_price2,prc)
+					elif avg_price > 0 and bid_mkt < avg_price:
+						prc = min(bid_mkt, abs(avg_price2))
+
+					elif avg_price < 0:
+						prc = min(bid_mkt, abs(avg_price))
 
 					else:
 						prc = 0
@@ -334,27 +344,31 @@ class MarketMaker(object):
 
 				# OFFERS
 
-				if place_asks :
+				if place_asks:
 
 					offerOB = ask_mkt
+					avg_price2 = avg_price + (avg_price * 2 / 100)
 
-					print('OFFERS',offerOB, 'posOpn', posOpn, 'posOB', posOB, 'posNet', posNet, 'avg_price', avg_price)
+					print('OFFERS', offerOB, 'posOpn', posOpn, 'posOB', posOB, 'posNet', posNet, 'avg_price', avg_price,
+					      'avg_price2', avg_price2)
 
-					if  posOpn == 0 :
+					if posOpn == 0:
 
-						if avg_price <  0 :
+						if avg_price < 0:
 
 							prc = 0
 
 						else:
-							prc = max(offerOB, avg_price)
+							prc = offerOB
 
-
-					elif avg_price == 0 and posOpn > 0 :
+					elif avg_price == 0:
 						prc = offerOB
 
-					elif avg_price > 0 :
-						prc = max(offerOB, avg_price)
+					elif avg_price < 0 and bid_mkt > avg_price:
+						prc = max(bid_mkt, abs(avg_price2))
+
+					elif avg_price > 0:
+						prc = max(offerOB, abs(avg_price))
 
 					else:
 						prc = 0
@@ -582,18 +596,24 @@ class MarketMaker(object):
 
 			self.vols[s] = math.sqrt(v)
 
+	
 
 if __name__ == '__main__':
 
-	try:
-		mmbot = MarketMaker(monitor=args.monitor, output=args.output)
-		mmbot.run()
-	except(KeyboardInterrupt, SystemExit):
-		print("Cancelling open orders")
-		mmbot.client.cancelall()
-		sys.exit()
-	except:
-		print(traceback.format_exc())
-		if args.restart:
-			mmbot.restart()
+	
+	while True:
+		 # 10 min.
+
+		try:
+
+			mmbot = MarketMaker(monitor=args.monitor, output=args.output)
+			mmbot.run()
+		except(KeyboardInterrupt, SystemExit):
+			print("Cancelling open orders")
+			mmbot.client.cancelall()
+			sys.exit()
+		except:
+			print(traceback.format_exc())
+			if args.restart:
+				mmbot.restart()
 
