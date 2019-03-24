@@ -14,8 +14,8 @@ from api import RestClient
 
 
 # training
-KEY = '3QPFpc42ruTiM'
-SECRET = '33KMEDOQ7BAX6BVHQ35I7MBOWDZNTFU3'
+KEY = '3QPFpc42ruTiN'
+SECRET = '33KMEDOQ7BAX6BVHQ35I7MBOWDZNTFU2'
 
 URL = 'https://www.deribit.com'
 
@@ -46,7 +46,7 @@ args = parser.parse_args()
 
 BP = 1e-4  # one basis point
 BTC_SYMBOL = 'btc'
-CONTRACT_SIZE = 5  # USD
+CONTRACT_SIZE = 10  # USD
 COV_RETURN_CAP = 100  # cap on variance for vol estimate
 DECAY_POS_LIM = 0.1  # position lim decay factor toward expiry
 EWMA_WGT_COV = 4  # parameter in % points for EWMA volatility estimate
@@ -78,9 +78,7 @@ PCT_QTY_BASE *= BP
 VOL_PRIOR *= PCT
 
 
-
 class MarketMaker(object):
-
 
 	def __init__(self, monitor=True, output=True):
 		self.equity_usd = None
@@ -153,13 +151,24 @@ class MarketMaker(object):
 				break
 
 		return {'bid': best_bid, 'ask': best_ask, 'imbalance': imbalance, 'imb_bids': imb_bids, 'imb_asks': imb_asks,
-		        'bids': bids, 'asks': asks, 'bid_ords':bid_ords,'ask_ords':ask_ords}
+		        'bids': bids, 'asks': asks, 'bid_ords': bid_ords, 'ask_ords': ask_ords}
 
 	def get_futures(self):  # Get all current futures instruments
 
 		self.futures_prv = cp.deepcopy(self.futures)
 
-		insts = [ {'kind': 'future', 'baseCurrency': 'BTC', 'currency': 'USD', 'minTradeSize': 1, 'instrumentName': 'BTC-PERPETUAL', 'isActive': True, 'settlement': 'perpetual', 'created': '2018-08-14 10:24:47 GMT', 'tickSize': 0.25, 'pricePrecision': 1, 'expiration': '3000-01-01 08:00:00 GMT', 'contractSize': 10.0},{'kind': 'future', 'baseCurrency': 'BTC', 'currency': 'USD', 'minTradeSize': 1, 'instrumentName': 'BTC-28JUN19', 'isActive': True, 'settlement': 'month', 'created': '2018-12-29 08:01:00 GMT', 'tickSize': 0.25, 'pricePrecision': 1, 'expiration': '2019-06-28 08:00:00 GMT', 'contractSize': 10.0},{'kind': 'future', 'baseCurrency': 'BTC', 'currency': 'USD', 'minTradeSize': 1, 'instrumentName': 'BTC-29MAR19', 'isActive': True, 'settlement': 'month', 'created': '2018-10-04 04:51:34 GMT', 'tickSize': 0.25, 'pricePrecision': 1, 'expiration': '2019-03-29 08:00:00 GMT', 'contractSize': 10.0}]
+		insts = [{'kind': 'future', 'baseCurrency': 'BTC', 'currency': 'USD', 'minTradeSize': 1,
+		          'instrumentName': 'BTC-PERPETUAL', 'isActive': True, 'settlement': 'perpetual',
+		          'created': '2018-08-14 10:24:47 GMT', 'tickSize': 0.25, 'pricePrecision': 1,
+		          'expiration': '3000-01-01 08:00:00 GMT', 'contractSize': 10.0},
+		         {'kind': 'future', 'baseCurrency': 'BTC', 'currency': 'USD', 'minTradeSize': 1,
+		          'instrumentName': 'BTC-28JUN19', 'isActive': True, 'settlement': 'month',
+		          'created': '2018-12-29 08:01:00 GMT', 'tickSize': 0.25, 'pricePrecision': 1,
+		          'expiration': '2019-06-28 08:00:00 GMT', 'contractSize': 10.0},
+		         {'kind': 'future', 'baseCurrency': 'BTC', 'currency': 'USD', 'minTradeSize': 1,
+		          'instrumentName': 'BTC-29MAR19', 'isActive': True, 'settlement': 'month',
+		          'created': '2018-10-04 04:51:34 GMT', 'tickSize': 0.25, 'pricePrecision': 1,
+		          'expiration': '2019-03-29 08:00:00 GMT', 'contractSize': 10.0}]
 		self.futures = sort_by_key({
 			i['instrumentName']: i for i in insts if i['kind'] == 'future'
 		})
@@ -206,33 +215,36 @@ class MarketMaker(object):
 		for fut in self.futures.keys():
 
 			try:
-				avg_price = self.positions[fut]['averagePrice']*(self.positions[fut]['size']/abs(self.positions[fut]['size']))
+				avg_price = self.positions[fut]['averagePrice'] * (
+							self.positions[fut]['size'] / abs(self.positions[fut]['size']))
 			except:
 				avg_price = 0
 
-			spot        = self.get_spot()
+			spot = self.get_spot()
 
 			# Me
 
-			#imbalanceOB = self.get_bbo(fut)['imbalance']
-			posOpn      =  sum(OrderedDict({k: self.positions[k]['size'] for k in self.futures.keys()}).values())
-			posOB       = sum([o['quantity'] for o in [o for o in self.client.getopenorders() if o['direction'] == 'buy']]) - sum(
+			imb = self.get_bbo(fut)['imbalance']
+			posOpn = sum(OrderedDict({k: self.positions[k]['size'] for k in self.futures.keys()}).values())
+			posOB = sum(
+				[o['quantity'] for o in [o for o in self.client.getopenorders() if o['direction'] == 'buy']]) - sum(
 				[o['quantity'] for o in [o for o in self.client.getopenorders() if o['direction'] == 'sell']])
-			posOBBid       = sum([o['quantity'] for o in [o for o in self.client.getopenorders() if o['direction'] == 'buy']])
-			posOBAsk       = sum([o['quantity'] for o in [o for o in self.client.getopenorders() if o['direction'] == 'sell']])
+			posOBBid = sum([o['quantity'] for o in [o for o in self.client.getopenorders() if o['direction'] == 'buy']])
+			posOBAsk = sum(
+				[o['quantity'] for o in [o for o in self.client.getopenorders() if o['direction'] == 'sell']])
 
-                        
-			posNet      = posOB + posOpn
-            # Me
+			posNet = posOB + posOpn
+			posNet2 = posNet + (10 / 100 * posNet)
 
-			nbids       = 2
-			nasks       = 2
+			# Me
 
-			place_bids =   'true'
-			place_asks =   'true'
+			nbids = 2
+			nasks = 2
 
+			place_bids = 'true'
+			place_asks = 'true'
 
-			print('posOpn',posOpn,'posOB',posOB, 'posNet', posNet, 'avg_price',avg_price)
+			print('posOpn', posOpn, 'posOB', posOB, 'posNet', posNet, 'posNet2', posNet2, 'avg_price', avg_price)
 			if not place_bids and not place_asks:
 				print('No bid no offer for %s' % fut)
 				continue
@@ -248,7 +260,6 @@ class MarketMaker(object):
 
 			bid_mkt = bbo['bid']
 			ask_mkt = bbo['ask']
-
 
 			if bid_mkt is None and ask_mkt is None:
 				bid_mkt = ask_mkt = spot
@@ -281,35 +292,56 @@ class MarketMaker(object):
 				asks[0] = ticksize_ceil(asks[0], tsz)
 
 			for i in range(max(nbids, nasks)):
-				
-				time.sleep(20)
+
+				time.sleep(1)
+				cekPos = abs(posNet) < abs(posNet2)
 
 				# BIDS
 				if place_bids:
 
 					offerOB = bid_mkt
-					avg_price2 = avg_price - (avg_price * 2 / 100)
+					avg_price2 = avg_price - (avg_price * .5 / 100)
 
 					print('BIDS', offerOB, 'posOpn', posOpn, 'posOB', posOB, 'posNet', posNet, 'avg_price', avg_price,
-					      'avg_price2', avg_price2)
+					      'avg_price2', avg_price2,'imb',imb)
 
+					# cek posisi awal
 					if posOpn == 0:
-
-						if avg_price > 0:
-
-							prc = 0
+						# posisi baru mulai, order bila bid>ask (memperkecil resiko salah)
+						if avg_price == 0 and imb > 0:
+							prc = bid_mkt
+						# sudah ada posisi short, buat posisi beli
+						elif avg_price < 0:
+							prc = min(bid_mkt, abs(avg_price) - 1)
+						# average down
+						elif avg_price > 0:
+							prc = avg_price2
 
 						else:
-							prc = bid_mkt
+							prc = 0
 
+					# net sudah ada posisi, individual masih kosong
 					elif avg_price == 0:
-						prc = bid_mkt
+						# mencegah bid makin menambah posisi long
+						#if posOpn > posNet2:
+						#	prc = 0
 
-					elif avg_price > 0 and bid_mkt < avg_price:
-						prc = min(bid_mkt, abs(avg_price2))
+						# menyeimbangkan posisi
+						if posNet < 0:
 
+							prc = bid_mkt
+						else:
+							prc = 0
+
+					# sudah ada posisi long
+					elif avg_price > 0:
+						# posisi rugi, average down
+						if bid_mkt < avg_price:
+							prc = min(bid_mkt, abs(avg_price2))
+
+					# sudah ada short, ambil laba
 					elif avg_price < 0:
-						prc = min(bid_mkt, abs(avg_price))
+						prc = min(bid_mkt, abs(avg_price) - 1)
 
 					else:
 						prc = 0
@@ -327,11 +359,11 @@ class MarketMaker(object):
 							try:
 								self.client.buy(fut, qty, prc, 'true')
 								cancel_oids.append(oid)
-								self.logger.warn('Edit failed for %s' % oid)
+								self.logger.warning('Edit failed for %s' % oid)
 							except (SystemExit, KeyboardInterrupt):
 								raise
 							except Exception as e:
-								self.logger.warn('Bid order failed: %s bid for %s'
+								self.logger.warning('Bid order failed: %s bid for %s'
 								                 % (prc, qty))
 					else:
 						try:
@@ -339,7 +371,7 @@ class MarketMaker(object):
 						except (SystemExit, KeyboardInterrupt):
 							raise
 						except Exception as e:
-							self.logger.warn('Bid order failed: %s bid for %s'
+							self.logger.warning('Bid order failed: %s bid for %s'
 							                 % (prc, qty))
 
 				# OFFERS
@@ -347,28 +379,61 @@ class MarketMaker(object):
 				if place_asks:
 
 					offerOB = ask_mkt
-					avg_price2 = avg_price + (avg_price * 2 / 100)
+					avg_price2 = avg_price + (avg_price * 0.5 / 100)
 
 					print('OFFERS', offerOB, 'posOpn', posOpn, 'posOB', posOB, 'posNet', posNet, 'avg_price', avg_price,
-					      'avg_price2', avg_price2)
+					      'avg_price2', avg_price2,'imb',imb)
 
+					# cek posisi awal
 					if posOpn == 0:
 
-						if avg_price < 0:
+						# posisi baru mulai, order bila bid>ask (memperkecil resiko salah)
+						if avg_price == 0 and imb < 0:
+							prc = bid_mkt
+						# sudah ada posisi short, buat posisi beli
+						elif avg_price > 0:
+							prc = max(bid_mkt, abs(avg_price) + 1)
 
-							prc = 0
+						# average up
+						elif avg_price < 0:
+							prc = avg_price2
 
 						else:
-							prc = offerOB
+							prc = 0
 
+					# net sudah ada posisi, individual masih kosong
 					elif avg_price == 0:
-						prc = offerOB
 
-					elif avg_price < 0 and bid_mkt > avg_price:
-						prc = max(bid_mkt, abs(avg_price2))
+						# mencegah bid makin menambah posisi short
+						#if posOpn > posNet2:
+						#	prc = 0
 
+
+						# menyeimbangkan posisi
+						if posNet > 0:
+							prc = bid_mkt
+
+						# order bila bid>ask (memperkecil resiko salah)
+						elif imb < 0:
+							prc = bid_mkt
+
+						else:
+							prc = 0
+
+					# sudah ada posisi short
+					elif avg_price < 0:
+
+						# posisi rugi, average up
+						if bid_mkt > avg_price:
+							prc = max(bid_mkt, abs(avg_price2))
+
+						else:
+							prc = 0
+
+					# sudah ada long, ambil laba
 					elif avg_price > 0:
-						prc = max(offerOB, abs(avg_price))
+						prc = max(bid_mkt, abs(avg_price) + 1)
+
 
 					else:
 						prc = 0
@@ -385,11 +450,11 @@ class MarketMaker(object):
 							try:
 								self.client.sell(fut, qty, prc, 'true')
 								cancel_oids.append(oid)
-								self.logger.warn('Sell Edit failed for %s' % oid)
+								self.logger.warning('Sell Edit failed for %s' % oid)
 							except (SystemExit, KeyboardInterrupt):
 								raise
 							except Exception as e:
-								self.logger.warn('Offer order failed: %s at %s'
+								self.logger.warning('Offer order failed: %s at %s'
 								                 % (qty, prc))
 
 					else:
@@ -398,7 +463,7 @@ class MarketMaker(object):
 						except (SystemExit, KeyboardInterrupt):
 							raise
 						except Exception as e:
-							self.logger.warn('Offer order failed: %s at %s'
+							self.logger.warning('Offer order failed: %s at %s'
 							                 % (qty, prc))
 			if nbids > len(bid_ords):
 				cancel_oids += [o['orderId'] for o in bid_ords[nbids:]]
@@ -408,7 +473,7 @@ class MarketMaker(object):
 				try:
 					self.client.cancel(oid)
 				except:
-					self.logger.warn('Order cancellations failed: %s' % oid)
+					self.logger.warning('Order cancellations failed: %s' % oid)
 
 	def restart(self):
 		try:
@@ -596,13 +661,11 @@ class MarketMaker(object):
 
 			self.vols[s] = math.sqrt(v)
 
-	
 
 if __name__ == '__main__':
 
-	
 	while True:
-		 # 10 min.
+		# 10 min.
 
 		try:
 
@@ -616,4 +679,6 @@ if __name__ == '__main__':
 			print(traceback.format_exc())
 			if args.restart:
 				mmbot.restart()
+
+
 
