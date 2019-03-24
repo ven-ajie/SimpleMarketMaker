@@ -12,12 +12,11 @@ import argparse, logging, math, os, sys, time, traceback
 from api import RestClient
 
 
-
 # training
-KEY = '3QPFpc42ruTiN'
-SECRET = '33KMEDOQ7BAX6BVHQ35I7MBOWDZNTFU2'
+KEY = 'AMUtuRXAtebd'
+SECRET = 'NX4XZFMOYCTF5G3ZOMEXYXEEOFATZLHI'
+URL = 'https://test.deribit.com'
 
-URL = 'https://www.deribit.com'
 
 # Add command line switches
 parser = argparse.ArgumentParser(description='Bot')
