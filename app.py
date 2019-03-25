@@ -235,7 +235,7 @@ class MarketMaker(object):
 			posNet = posOB + posOpn
 			posNet2 = posNet + (10 / 100 * posNet)			
 			Margin= avg_price*PCT/8 #8 = arbitrase aja
-			avg_priceAdj = avg_price*PCT #up/down
+			avg_priceAdj = avg_price*PCT/2 #up/down, 2= arbitrase aja
 			
 
 			# Me
