@@ -303,7 +303,7 @@ class MarketMaker(object):
 					offerOB = bid_mkt
 					
 					print('BIDS', offerOB, 'posOpn', posOpn, 'posOB', posOB, 'posNet', posNet, 'avg_price', avg_price,
-					      'avg_priceAdj', avg_priceAdj,'imb',imb)
+					      'avg_priceAdj', avg_price-avg_priceAdj,'imb',imb)
 
 					# cek posisi awal
 					if posOpn == 0:
@@ -315,7 +315,7 @@ class MarketMaker(object):
 							prc = min(bid_mkt, (abs(avg_price) - abs(Margin)))
 						# average down
 						elif avg_price > 0:
-							prc = avg_priceAdj
+							prc = avg_price-avg_priceAdj
 
 						else:
 							prc = 0
@@ -381,7 +381,7 @@ class MarketMaker(object):
 					offerOB = ask_mkt
 					
 					print('OFFERS', offerOB, 'posOpn', posOpn, 'posOB', posOB, 'posNet', posNet, 'avg_price', avg_price,
-					      'avg_priceAdj', avg_priceAdj,'imb',imb)
+					      'avg_priceAdj', avg_priceAdj+avg_price,'imb',imb)
 
 					# cek posisi awal
 					if posOpn == 0:
@@ -395,7 +395,7 @@ class MarketMaker(object):
 
 						# average up
 						elif avg_price < 0:
-							prc = avg_priceAdj
+							prc = avg_price+avg_priceAdj
 
 						else:
 							prc = 0
