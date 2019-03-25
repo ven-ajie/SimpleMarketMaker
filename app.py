@@ -15,6 +15,8 @@ KEY = 'AMUtuRXAtebd'
 SECRET = 'NX4XZFMOYCTF5G3ZOMEXYXEEOFATZLHI'
 URL = 'https://test.deribit.com'
 
+
+
 # Add command line switches
 parser = argparse.ArgumentParser(description='Bot')
 
@@ -212,7 +214,7 @@ class MarketMaker(object):
 
 			try:
 				avg_price = self.positions[fut]['averagePrice'] * (
-							self.positions[fut]['size'] / abs(self.positions[fut]['size']))
+						self.positions[fut]['size'] / abs(self.positions[fut]['size']))
 			except:
 				avg_price = 0
 
@@ -230,10 +232,13 @@ class MarketMaker(object):
 				[o['quantity'] for o in [o for o in self.client.getopenorders() if o['direction'] == 'sell']])
 
 			posNet = posOB + posOpn
-			posNet2 = posNet + (10 / 100 * posNet)			
-			Margin= avg_price*PCT/8 #8 = arbitrase aja
-			avg_priceAdj = avg_price*PCT/2 #up/down, 2= arbitrase aja
-			
+			posNet2 = posNet + (10 / 100 * posNet)
+			Margin= avg_price * (PCT/8)  # 8 = arbitrase aja
+			avg_priceAdj = abs(avg_price ) *(PCT/2)  # up/down, 2= arbitrase aja
+			avg_down = avg_price - avg_priceAdj
+			avg_up = avg_price + avg_priceAdj
+
+
 
 			# Me
 
@@ -290,17 +295,15 @@ class MarketMaker(object):
 
 				asks[0] = ticksize_ceil(asks[0], tsz)
 
-			for i in range(max(nbids, nasks)):
+			for i in range(max(nbids, nasks)):	
 
-				time.sleep(1)
-				
 				# BIDS
 				if place_bids:
 
 					offerOB = bid_mkt
-					
+
 					print('BIDS', offerOB, 'posOpn', posOpn, 'posOB', posOB, 'posNet', posNet, 'avg_price', avg_price,
-					      'avg_priceAdj', avg_price-avg_priceAdj,'imb',imb)
+					      'avg_priceAdj', avg_price -avg_priceAdj ,'imb' ,imb)
 
 					# cek posisi awal
 					if posOpn == 0:
@@ -311,8 +314,9 @@ class MarketMaker(object):
 						elif avg_price < 0:
 							prc = min(bid_mkt, (abs(avg_price) - abs(Margin)))
 						# average down
-						elif avg_price > 0:
-							prc = abs(avg_price)-abs(avg_priceAdj)
+						elif avg_price > 0 and bid_mkt < avg_price:
+							prc = min(bid_mkt, abs(avg_down))
+							print('prc downn',prc)
 
 						else:
 							prc = 0
@@ -320,7 +324,7 @@ class MarketMaker(object):
 					# net sudah ada posisi, individual masih kosong
 					elif avg_price == 0:
 						# mencegah bid makin menambah posisi long
-						#if posOpn > posNet2:
+						# if posOpn > posNet2:
 						#	prc = 0
 
 						# menyeimbangkan posisi
@@ -334,7 +338,8 @@ class MarketMaker(object):
 					elif avg_price > 0:
 						# posisi rugi, average down
 						if bid_mkt < avg_price:
-							prc = min(bid_mkt, abs(avg_price)+abs(avg_priceAdj))
+							prc = min(bid_mkt, abs(avg_down))
+							print('prc downn', prc)
 
 					# sudah ada short, ambil laba
 					elif avg_price < 0:
@@ -361,7 +366,7 @@ class MarketMaker(object):
 								raise
 							except Exception as e:
 								self.logger.warning('Bid order failed: %s bid for %s'
-								                 % (prc, qty))
+								                    % (prc, qty))
 					else:
 						try:
 							self.client.buy(fut, qty, prc, 'true')
@@ -369,16 +374,16 @@ class MarketMaker(object):
 							raise
 						except Exception as e:
 							self.logger.warning('Bid order failed: %s bid for %s'
-							                 % (prc, qty))
+							                    % (prc, qty))
 
 				# OFFERS
 
 				if place_asks:
 
 					offerOB = ask_mkt
-					
+
 					print('OFFERS', offerOB, 'posOpn', posOpn, 'posOB', posOB, 'posNet', posNet, 'avg_price', avg_price,
-					      'avg_priceAdj', avg_priceAdj+avg_price,'imb',imb)
+					      'avg_priceAdj', avg_priceAdj +avg_price ,'imb' ,imb)
 
 					# cek posisi awal
 					if posOpn == 0:
@@ -389,10 +394,11 @@ class MarketMaker(object):
 						# sudah ada posisi short, buat posisi beli
 						elif avg_price > 0:
 							prc = max(bid_mkt, (abs(avg_price) + abs(Margin)))
+							print('prc up', prc)
 
 						# average up
-						elif avg_price < 0:
-							prc = abs(avg_price)+abs(avg_priceAdj)
+						elif avg_price < 0 and bid_mkt > avg_price:
+							prc = max(bid_mkt, abs(avg_up))
 
 						else:
 							prc = 0
@@ -401,7 +407,7 @@ class MarketMaker(object):
 					elif avg_price == 0:
 
 						# mencegah bid makin menambah posisi short
-						#if posOpn > posNet2:
+						# if posOpn > posNet2:
 						#	prc = 0
 
 
@@ -421,7 +427,8 @@ class MarketMaker(object):
 
 						# posisi rugi, average up
 						if bid_mkt > avg_price:
-							prc = max(bid_mkt, abs(avg_priceAdj)+abs(avg_price))
+							prc = max(bid_mkt, abs(avg_up))
+							print('prc up', prc)
 
 						else:
 							prc = 0
@@ -451,7 +458,7 @@ class MarketMaker(object):
 								raise
 							except Exception as e:
 								self.logger.warning('Offer order failed: %s at %s'
-								                 % (qty, prc))
+								                    % (qty, prc))
 
 					else:
 						try:
@@ -460,7 +467,7 @@ class MarketMaker(object):
 							raise
 						except Exception as e:
 							self.logger.warning('Offer order failed: %s at %s'
-							                 % (qty, prc))
+							                    % (qty, prc))
 			if nbids > len(bid_ords):
 				cancel_oids += [o['orderId'] for o in bid_ords[nbids:]]
 			if nasks > len(ask_ords):
