@@ -1,4 +1,3 @@
-
 from collections import OrderedDict
 from datetime import datetime
 from os.path import getmtime
@@ -11,12 +10,10 @@ import argparse, logging, math, os, sys, time, traceback
 
 from api import RestClient
 
-
 # training
 KEY = 'AMUtuRXAtebd'
 SECRET = 'NX4XZFMOYCTF5G3ZOMEXYXEEOFATZLHI'
 URL = 'https://test.deribit.com'
-
 
 # Add command line switches
 parser = argparse.ArgumentParser(description='Bot')
@@ -315,7 +312,7 @@ class MarketMaker(object):
 							prc = min(bid_mkt, (abs(avg_price) - abs(Margin)))
 						# average down
 						elif avg_price > 0:
-							prc = avg_price-avg_priceAdj
+							prc = abs(avg_price)-abs(avg_priceAdj)
 
 						else:
 							prc = 0
@@ -337,7 +334,7 @@ class MarketMaker(object):
 					elif avg_price > 0:
 						# posisi rugi, average down
 						if bid_mkt < avg_price:
-							prc = min(bid_mkt, abs(avg_priceAdj))
+							prc = min(bid_mkt, abs(avg_price)+abs(avg_priceAdj))
 
 					# sudah ada short, ambil laba
 					elif avg_price < 0:
@@ -395,7 +392,7 @@ class MarketMaker(object):
 
 						# average up
 						elif avg_price < 0:
-							prc = avg_price+avg_priceAdj
+							prc = abs(avg_price)+abs(avg_priceAdj)
 
 						else:
 							prc = 0
@@ -424,7 +421,7 @@ class MarketMaker(object):
 
 						# posisi rugi, average up
 						if bid_mkt > avg_price:
-							prc = max(bid_mkt, abs(avg_priceAdj))
+							prc = max(bid_mkt, abs(avg_priceAdj)+abs(avg_price))
 
 						else:
 							prc = 0
