@@ -233,8 +233,7 @@ class MarketMaker(object):
 				[o['quantity'] for o in [o for o in self.client.getopenorders() if o['direction'] == 'sell']])
 
 			posNet = posOB + posOpn
-			posNet2 = posNet + (10 / 100 * posNet)
-			pct = 1/100
+			posNet2 = posNet + (10 / 100 * posNet)			
 			Margin= avg_price*PCT/8 #8 = arbitrase aja
 			avg_priceAdj = avg_price*PCT #up/down
 			
@@ -297,16 +296,14 @@ class MarketMaker(object):
 			for i in range(max(nbids, nasks)):
 
 				time.sleep(1)
-				cekPos = abs(posNet) < abs(posNet2)
-
+				
 				# BIDS
 				if place_bids:
 
 					offerOB = bid_mkt
-					avg_price2 = avg_price - (avg_price * .5 / 100)
-
+					
 					print('BIDS', offerOB, 'posOpn', posOpn, 'posOB', posOB, 'posNet', posNet, 'avg_price', avg_price,
-					      'avg_price2', avg_price2,'imb',imb)
+					      'avg_priceAdj', avg_priceAdj,'imb',imb)
 
 					# cek posisi awal
 					if posOpn == 0:
@@ -382,8 +379,7 @@ class MarketMaker(object):
 				if place_asks:
 
 					offerOB = ask_mkt
-					avg_price2 = avg_price + (avg_price * 0.5 / 100)
-
+					
 					print('OFFERS', offerOB, 'posOpn', posOpn, 'posOB', posOB, 'posNet', posNet, 'avg_price', avg_price,
 					      'avg_priceAdj', avg_priceAdj,'imb',imb)
 
