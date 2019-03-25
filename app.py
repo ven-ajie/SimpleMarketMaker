@@ -234,11 +234,15 @@ class MarketMaker(object):
 
 			posNet = posOB + posOpn
 			posNet2 = posNet + (10 / 100 * posNet)
+			pct = 1/100
+			Margin= avg_price*PCT/8 #8 = arbitrase aja
+			avg_priceAdj = avg_price*PCT #up/down
+			
 
 			# Me
 
-			nbids = 2
-			nasks = 2
+			nbids = 1
+			nasks = 1
 
 			place_bids = 'true'
 			place_asks = 'true'
@@ -311,10 +315,10 @@ class MarketMaker(object):
 							prc = bid_mkt
 						# sudah ada posisi short, buat posisi beli
 						elif avg_price < 0:
-							prc = min(bid_mkt, abs(avg_price) - 1)
+							prc = min(bid_mkt, abs(avg_price) - Margin)
 						# average down
 						elif avg_price > 0:
-							prc = avg_price2
+							prc = avg_priceAdj
 
 						else:
 							prc = 0
@@ -336,11 +340,11 @@ class MarketMaker(object):
 					elif avg_price > 0:
 						# posisi rugi, average down
 						if bid_mkt < avg_price:
-							prc = min(bid_mkt, abs(avg_price2))
+							prc = min(bid_mkt, abs(avg_priceAdj))
 
 					# sudah ada short, ambil laba
 					elif avg_price < 0:
-						prc = min(bid_mkt, abs(avg_price) - 1)
+						prc = min(bid_mkt, abs(avg_price) - Margin)
 
 					else:
 						prc = 0
@@ -381,7 +385,7 @@ class MarketMaker(object):
 					avg_price2 = avg_price + (avg_price * 0.5 / 100)
 
 					print('OFFERS', offerOB, 'posOpn', posOpn, 'posOB', posOB, 'posNet', posNet, 'avg_price', avg_price,
-					      'avg_price2', avg_price2,'imb',imb)
+					      'avg_priceAdj', avg_priceAdj,'imb',imb)
 
 					# cek posisi awal
 					if posOpn == 0:
@@ -391,11 +395,11 @@ class MarketMaker(object):
 							prc = bid_mkt
 						# sudah ada posisi short, buat posisi beli
 						elif avg_price > 0:
-							prc = max(bid_mkt, abs(avg_price) + 1)
+							prc = max(bid_mkt, abs(avg_price) + Margin)
 
 						# average up
 						elif avg_price < 0:
-							prc = avg_price2
+							prc = avg_priceAdj
 
 						else:
 							prc = 0
@@ -424,14 +428,14 @@ class MarketMaker(object):
 
 						# posisi rugi, average up
 						if bid_mkt > avg_price:
-							prc = max(bid_mkt, abs(avg_price2))
+							prc = max(bid_mkt, abs(avg_priceAdj))
 
 						else:
 							prc = 0
 
 					# sudah ada long, ambil laba
 					elif avg_price > 0:
-						prc = max(bid_mkt, abs(avg_price) + 1)
+						prc = max(bid_mkt, abs(avg_price) + Margin)
 
 
 					else:
