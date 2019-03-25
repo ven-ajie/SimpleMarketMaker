@@ -234,9 +234,9 @@ class MarketMaker(object):
 			posNet = posOB + posOpn
 			posNet2 = posNet + (10 / 100 * posNet)
 			Margin= avg_price * (PCT/8)  # 8 = arbitrase aja
-			avg_priceAdj = abs(avg_price ) *(PCT/2)  # up/down, 2= arbitrase aja
-			avg_down = avg_price - avg_priceAdj
-			avg_up = avg_price + avg_priceAdj
+			avg_priceAdj = abs(avg_price) *(PCT/2)  # up/down, 2= arbitrase aja
+			avg_down = abs(avg_price) - abs(avg_priceAdj)
+			avg_up = abs(avg_price) + abs(avg_priceAdj)
 
 
 
@@ -303,7 +303,7 @@ class MarketMaker(object):
 					offerOB = bid_mkt
 
 					print('BIDS', offerOB, 'posOpn', posOpn, 'posOB', posOB, 'posNet', posNet, 'avg_price', avg_price,
-					      'avg_priceAdj', avg_price -avg_priceAdj ,'imb' ,imb)
+					      'avg_pricedown', avg_down ,'imb' ,imb)
 
 					# cek posisi awal
 					if posOpn == 0:
@@ -383,7 +383,7 @@ class MarketMaker(object):
 					offerOB = ask_mkt
 
 					print('OFFERS', offerOB, 'posOpn', posOpn, 'posOB', posOB, 'posNet', posNet, 'avg_price', avg_price,
-					      'avg_priceAdj', avg_priceAdj +avg_price ,'imb' ,imb)
+					      'avg_priceAdj', avg_up ,'imb' ,imb)
 
 					# cek posisi awal
 					if posOpn == 0:
@@ -682,6 +682,3 @@ if __name__ == '__main__':
 			print(traceback.format_exc())
 			if args.restart:
 				mmbot.restart()
-
-
-
