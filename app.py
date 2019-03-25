@@ -312,7 +312,7 @@ class MarketMaker(object):
 							prc = bid_mkt
 						# sudah ada posisi short, buat posisi beli
 						elif avg_price < 0:
-							prc = min(bid_mkt, abs(avg_price) - Margin)
+							prc = min(bid_mkt, (abs(avg_price) - abs(Margin)))
 						# average down
 						elif avg_price > 0:
 							prc = avg_priceAdj
@@ -341,7 +341,7 @@ class MarketMaker(object):
 
 					# sudah ada short, ambil laba
 					elif avg_price < 0:
-						prc = min(bid_mkt, abs(avg_price) - Margin)
+						prc = min(bid_mkt, (abs(avg_price) - abs(Margin)))
 
 					else:
 						prc = 0
@@ -391,7 +391,7 @@ class MarketMaker(object):
 							prc = bid_mkt
 						# sudah ada posisi short, buat posisi beli
 						elif avg_price > 0:
-							prc = max(bid_mkt, abs(avg_price) + Margin)
+							prc = max(bid_mkt, (abs(avg_price) + abs(Margin)))
 
 						# average up
 						elif avg_price < 0:
@@ -431,7 +431,7 @@ class MarketMaker(object):
 
 					# sudah ada long, ambil laba
 					elif avg_price > 0:
-						prc = max(bid_mkt, abs(avg_price) + Margin)
+						prc = max(bid_mkt, (abs(avg_price) + abs(Margin)))
 
 
 					else:
