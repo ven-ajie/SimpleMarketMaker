@@ -1,3 +1,4 @@
+
 from collections import OrderedDict
 from datetime import datetime
 from os.path import getmtime
@@ -10,12 +11,9 @@ import argparse, logging, math, os, sys, time, traceback
 
 from api import RestClient
 
-# training
 KEY = 'AVmfiQceujWF'
 SECRET = '33WJ3QOFCBJMUB24OOYANJGWWSVG7RP5'
 URL = 'https://test.deribit.com'
-
-
 
 # Add command line switches
 parser = argparse.ArgumentParser(description='Bot')
@@ -44,7 +42,7 @@ args = parser.parse_args()
 
 BP = 1e-4  # one basis point
 BTC_SYMBOL = 'btc'
-CONTRACT_SIZE = 10  # USD
+CONTRACT_SIZE = 5  # USD
 COV_RETURN_CAP = 100  # cap on variance for vol estimate
 DECAY_POS_LIM = 0.1  # position lim decay factor toward expiry
 EWMA_WGT_COV = 4  # parameter in % points for EWMA volatility estimate
@@ -76,6 +74,7 @@ PCT_QTY_BASE *= BP
 VOL_PRIOR *= PCT
 
 
+
 class MarketMaker(object):
 
 	def __init__(self, monitor=True, output=True):
@@ -101,6 +100,7 @@ class MarketMaker(object):
 
 	def create_client(self):
 		self.client = RestClient(KEY, SECRET, URL)
+
 
 	def get_bbo(self, contract):  # Get best b/o excluding own orders
 
@@ -332,6 +332,10 @@ class MarketMaker(object):
 						if posNet < 0:
 
 							prc = bid_mkt
+
+						#elif imb > 0:
+						#	prc = bid_mkt
+
 						else:
 							prc = 0
 
@@ -378,71 +382,71 @@ class MarketMaker(object):
 						self.logger.warning('Bid order failed: %s bid for %s'
 						                    % (prc, qty))
 
-			# OFFERS
+				# OFFERS
 
-			if place_asks:
+				if place_asks:
 
-				offerOB = ask_mkt
+					offerOB = ask_mkt
 
-				print('OFFERS', offerOB, 'posOpn', posOpn, 'posOB', posOB, 'posNet', posNet, 'avg_price', avg_price,
-				      'avg_priceAdj', avg_up, 'imb', imb)
+					print('OFFERS', offerOB, 'posOpn', posOpn, 'posOB', posOB, 'posNet', posNet, 'avg_price', avg_price,
+					      'avg_priceAdj', avg_up, 'imb', imb)
 
-				# cek posisi awal
-				if posOpn == 0:
+					# cek posisi awal
+					if posOpn == 0:
 
-					# posisi baru mulai, order bila bid>ask (memperkecil resiko salah)
-					if avg_price == 0 and imb < 0:
-						prc = bid_mkt
-					# sudah ada posisi short, buat posisi beli
+						# posisi baru mulai, order bila bid>ask (memperkecil resiko salah)
+						if avg_price == 0 and imb < 0:
+							prc = bid_mkt
+						# sudah ada posisi short, buat posisi beli
+						elif avg_price > 0:
+							prc = max(bid_mkt, (abs(avg_price) + abs(Margin)))
+							print('prc up', prc)
+
+						# average up
+						elif avg_price < 0 and bid_mkt > avg_price:
+							prc = max(bid_mkt, abs(avg_up))
+
+						else:
+							prc = 0
+
+					# net sudah ada posisi, individual masih kosong
+					elif avg_price == 0:
+
+						# mencegah bid makin menambah posisi short
+						# if posOpn > posNet2:
+						#	prc = 0
+
+						# menyeimbangkan posisi
+						if posNet > 0:
+							prc = bid_mkt
+
+						# order bila bid>ask (memperkecil resiko salah)
+						#elif imb < 0:
+						#	prc = bid_mkt
+
+						else:
+							prc = 0
+
+					# sudah ada posisi short
+					elif avg_price < 0:
+
+						# posisi rugi, average up
+						if bid_mkt > avg_price:
+							prc = max(bid_mkt, abs(avg_up))
+							print('prc up', prc)
+
+						else:
+							prc = 0
+
+					# sudah ada long, ambil laba
 					elif avg_price > 0:
 						prc = max(bid_mkt, (abs(avg_price) + abs(Margin)))
-						print('prc up', prc)
 
-					# average up
-					elif avg_price < 0 and bid_mkt > avg_price:
-						prc = max(bid_mkt, abs(avg_up))
 
 					else:
 						prc = 0
 
-				# net sudah ada posisi, individual masih kosong
-				elif avg_price == 0:
-
-					# mencegah bid makin menambah posisi short
-					# if posOpn > posNet2:
-					#	prc = 0
-
-					# menyeimbangkan posisi
-					if posNet > 0:
-						prc = bid_mkt
-
-					# order bila bid>ask (memperkecil resiko salah)
-					elif imb < 0:
-						prc = bid_mkt
-
-					else:
-						prc = 0
-
-				# sudah ada posisi short
-				elif avg_price < 0:
-
-					# posisi rugi, average up
-					if bid_mkt > avg_price:
-						prc = max(bid_mkt, abs(avg_up))
-						print('prc up', prc)
-
-					else:
-						prc = 0
-
-				# sudah ada long, ambil laba
-				elif avg_price > 0:
-					prc = max(bid_mkt, (abs(avg_price) + abs(Margin)))
-
-
-				else:
-					prc = 0
-
-					qty = 1
+						qty = 1
 
 					if i < len_ask_ords:
 						oid = ask_ords[i]['orderId']
@@ -668,18 +672,15 @@ class MarketMaker(object):
 
 if __name__ == '__main__':
 
-	while True:
-		# 10 min.
+	try:
+		mmbot = MarketMaker(monitor=args.monitor, output=args.output)
+		mmbot.run()
+	except(KeyboardInterrupt, SystemExit):
+		print("Cancelling open orders")
+		mmbot.client.cancelall()
+		sys.exit()
+	except:
+		print(traceback.format_exc())
+		if args.restart:
+			mmbot.restart()
 
-		try:
-
-			mmbot = MarketMaker(monitor=args.monitor, output=args.output)
-			mmbot.run()
-		except(KeyboardInterrupt, SystemExit):
-			print("Cancelling open orders")
-			mmbot.client.cancelall()
-			sys.exit()
-		except:
-			print(traceback.format_exc())
-			if args.restart:
-				mmbot.restart()
