@@ -11,8 +11,8 @@ import argparse, logging, math, os, sys, time, traceback
 from api import RestClient
 
 # training
-KEY = 'AMUtuRXAtebd'
-SECRET = 'NX4XZFMOYCTF5G3ZOMEXYXEEOFATZLHI'
+KEY = 'AVmfiQceujWF'
+SECRET = '33WJ3QOFCBJMUB24OOYANJGWWSVG7RP5'
 URL = 'https://test.deribit.com'
 
 
@@ -163,8 +163,9 @@ class MarketMaker(object):
 		          'instrumentName': 'BTC-28JUN19', 'isActive': True, 'settlement': 'month',
 		          'created': '2018-12-29 08:01:00 GMT', 'tickSize': 0.25, 'pricePrecision': 1,
 		          'expiration': '2019-06-28 08:00:00 GMT', 'contractSize': 10.0},
+
 		         {'kind': 'future', 'baseCurrency': 'BTC', 'currency': 'USD', 'minTradeSize': 1,
-		          'instrumentName': 'BTC-29MAR19', 'isActive': True, 'settlement': 'month',
+		          'instrumentName': 'BTC-27SEP19', 'isActive': True, 'settlement': 'month',
 		          'created': '2018-10-04 04:51:34 GMT', 'tickSize': 0.25, 'pricePrecision': 1,
 		          'expiration': '2019-03-29 08:00:00 GMT', 'contractSize': 10.0}]
 		self.futures = sort_by_key({
@@ -223,6 +224,7 @@ class MarketMaker(object):
 			# Me
 
 			imb = self.get_bbo(fut)['imbalance']
+			MM = self.client.account()['initialMargin'] / self.client.account()['marginBalance']
 			posOpn = sum(OrderedDict({k: self.positions[k]['size'] for k in self.futures.keys()}).values())
 			posOB = sum(
 				[o['quantity'] for o in [o for o in self.client.getopenorders() if o['direction'] == 'buy']]) - sum(
@@ -233,12 +235,10 @@ class MarketMaker(object):
 
 			posNet = posOB + posOpn
 			posNet2 = posNet + (10 / 100 * posNet)
-			Margin= avg_price * (PCT/8)  # 8 = arbitrase aja
-			avg_priceAdj = abs(avg_price) *(PCT/2)  # up/down, 2= arbitrase aja
+			Margin = avg_price * (PCT / 8)  # 8 = arbitrase aja
+			avg_priceAdj = abs(avg_price) * (PCT / 2)  # up/down, 2= arbitrase aja
 			avg_down = abs(avg_price) - abs(avg_priceAdj)
 			avg_up = abs(avg_price) + abs(avg_priceAdj)
-
-
 
 			# Me
 
@@ -248,7 +248,8 @@ class MarketMaker(object):
 			place_bids = 'true'
 			place_asks = 'true'
 
-			print('posOpn', posOpn, 'posOB', posOB, 'posNet', posNet, 'posNet2', posNet2, 'avg_price', avg_price)
+			print('posOpn', posOpn, 'posOB', posOB, 'posNet', posNet, 'posNet2', posNet2, 'avg_price', avg_price, MM,
+			      'MM')
 			if not place_bids and not place_asks:
 				print('No bid no offer for %s' % fut)
 				continue
@@ -295,7 +296,7 @@ class MarketMaker(object):
 
 				asks[0] = ticksize_ceil(asks[0], tsz)
 
-			for i in range(max(nbids, nasks)):	
+			for i in range(max(nbids, nasks)):
 
 				# BIDS
 				if place_bids:
@@ -303,7 +304,7 @@ class MarketMaker(object):
 					offerOB = bid_mkt
 
 					print('BIDS', offerOB, 'posOpn', posOpn, 'posOB', posOB, 'posNet', posNet, 'avg_price', avg_price,
-					      'avg_pricedown', avg_down ,'imb' ,imb)
+					      'avg_pricedown', avg_down, 'imb', imb)
 
 					# cek posisi awal
 					if posOpn == 0:
@@ -316,7 +317,7 @@ class MarketMaker(object):
 						# average down
 						elif avg_price > 0 and bid_mkt < avg_price:
 							prc = min(bid_mkt, abs(avg_down))
-							print('prc downn',prc)
+							print('prc down', prc)
 
 						else:
 							prc = 0
@@ -350,96 +351,96 @@ class MarketMaker(object):
 
 					qty = 1
 
-					if i < len_bid_ords:
 
-						oid = bid_ords[i]['orderId']
-						try:
-							self.client.edit(oid, qty, prc)
-						except (SystemExit, KeyboardInterrupt):
-							raise
-						except:
-							try:
-								self.client.buy(fut, qty, prc, 'true')
-								cancel_oids.append(oid)
-								self.logger.warning('Edit failed for %s' % oid)
-							except (SystemExit, KeyboardInterrupt):
-								raise
-							except Exception as e:
-								self.logger.warning('Bid order failed: %s bid for %s'
-								                    % (prc, qty))
-					else:
+				if i < len_bid_ords:
+
+					oid = bid_ords[i]['orderId']
+					try:
+						self.client.edit(oid, qty, prc)
+					except (SystemExit, KeyboardInterrupt):
+						raise
+					except:
 						try:
 							self.client.buy(fut, qty, prc, 'true')
+							cancel_oids.append(oid)
+							self.logger.warning('Edit failed for %s' % oid)
 						except (SystemExit, KeyboardInterrupt):
 							raise
 						except Exception as e:
 							self.logger.warning('Bid order failed: %s bid for %s'
 							                    % (prc, qty))
+				else:
+					try:
+						self.client.buy(fut, qty, prc, 'true')
+					except (SystemExit, KeyboardInterrupt):
+						raise
+					except Exception as e:
+						self.logger.warning('Bid order failed: %s bid for %s'
+						                    % (prc, qty))
 
-				# OFFERS
+			# OFFERS
 
-				if place_asks:
+			if place_asks:
 
-					offerOB = ask_mkt
+				offerOB = ask_mkt
 
-					print('OFFERS', offerOB, 'posOpn', posOpn, 'posOB', posOB, 'posNet', posNet, 'avg_price', avg_price,
-					      'avg_priceAdj', avg_up ,'imb' ,imb)
+				print('OFFERS', offerOB, 'posOpn', posOpn, 'posOB', posOB, 'posNet', posNet, 'avg_price', avg_price,
+				      'avg_priceAdj', avg_up, 'imb', imb)
 
-					# cek posisi awal
-					if posOpn == 0:
+				# cek posisi awal
+				if posOpn == 0:
 
-						# posisi baru mulai, order bila bid>ask (memperkecil resiko salah)
-						if avg_price == 0 and imb < 0:
-							prc = bid_mkt
-						# sudah ada posisi short, buat posisi beli
-						elif avg_price > 0:
-							prc = max(bid_mkt, (abs(avg_price) + abs(Margin)))
-							print('prc up', prc)
-
-						# average up
-						elif avg_price < 0 and bid_mkt > avg_price:
-							prc = max(bid_mkt, abs(avg_up))
-
-						else:
-							prc = 0
-
-					# net sudah ada posisi, individual masih kosong
-					elif avg_price == 0:
-
-						# mencegah bid makin menambah posisi short
-						# if posOpn > posNet2:
-						#	prc = 0
-
-
-						# menyeimbangkan posisi
-						if posNet > 0:
-							prc = bid_mkt
-
-						# order bila bid>ask (memperkecil resiko salah)
-						elif imb < 0:
-							prc = bid_mkt
-
-						else:
-							prc = 0
-
-					# sudah ada posisi short
-					elif avg_price < 0:
-
-						# posisi rugi, average up
-						if bid_mkt > avg_price:
-							prc = max(bid_mkt, abs(avg_up))
-							print('prc up', prc)
-
-						else:
-							prc = 0
-
-					# sudah ada long, ambil laba
+					# posisi baru mulai, order bila bid>ask (memperkecil resiko salah)
+					if avg_price == 0 and imb < 0:
+						prc = bid_mkt
+					# sudah ada posisi short, buat posisi beli
 					elif avg_price > 0:
 						prc = max(bid_mkt, (abs(avg_price) + abs(Margin)))
+						print('prc up', prc)
 
+					# average up
+					elif avg_price < 0 and bid_mkt > avg_price:
+						prc = max(bid_mkt, abs(avg_up))
 
 					else:
 						prc = 0
+
+				# net sudah ada posisi, individual masih kosong
+				elif avg_price == 0:
+
+					# mencegah bid makin menambah posisi short
+					# if posOpn > posNet2:
+					#	prc = 0
+
+					# menyeimbangkan posisi
+					if posNet > 0:
+						prc = bid_mkt
+
+					# order bila bid>ask (memperkecil resiko salah)
+					elif imb < 0:
+						prc = bid_mkt
+
+					else:
+						prc = 0
+
+				# sudah ada posisi short
+				elif avg_price < 0:
+
+					# posisi rugi, average up
+					if bid_mkt > avg_price:
+						prc = max(bid_mkt, abs(avg_up))
+						print('prc up', prc)
+
+					else:
+						prc = 0
+
+				# sudah ada long, ambil laba
+				elif avg_price > 0:
+					prc = max(bid_mkt, (abs(avg_price) + abs(Margin)))
+
+
+				else:
+					prc = 0
 
 					qty = 1
 
