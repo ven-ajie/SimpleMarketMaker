@@ -11,11 +11,6 @@ import argparse, logging, math, os, sys, time, traceback
 
 from api import RestClient
 
-#KEY = '4pWK6JhBqKMb1'
-#SECRET = 'YZGTK53EYZWAJY3ELTCRYVJ7H23RDKYC'
-
-#URL = 'https://www.deribit.com'
-
 KEY = 'AVmfiQceujWF'
 SECRET = '33WJ3QOFCBJMUB24OOYANJGWWSVG7RP5'
 URL = 'https://test.deribit.com'
