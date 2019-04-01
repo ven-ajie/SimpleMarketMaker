@@ -11,6 +11,11 @@ import argparse, logging, math, os, sys, time, traceback
 
 from api import RestClient
 
+#KEY = '4pWK6JhBqKMb1'
+#SECRET = 'YZGTK53EYZWAJY3ELTCRYVJ7H23RDKYC'
+
+#URL = 'https://www.deribit.com'
+
 KEY = 'AVmfiQceujWF'
 SECRET = '33WJ3QOFCBJMUB24OOYANJGWWSVG7RP5'
 URL = 'https://test.deribit.com'
@@ -226,6 +231,7 @@ class MarketMaker(object):
 			imb = self.get_bbo(fut)['imbalance']
 			MM = self.client.account()['initialMargin'] / self.client.account()['marginBalance']
 			posOpn = sum(OrderedDict({k: self.positions[k]['size'] for k in self.futures.keys()}).values())
+			posFut = abs(self.positions[fut]['size'])
 			posOB = sum(
 				[o['quantity'] for o in [o for o in self.client.getopenorders() if o['direction'] == 'buy']]) - sum(
 				[o['quantity'] for o in [o for o in self.client.getopenorders() if o['direction'] == 'sell']])
@@ -234,7 +240,6 @@ class MarketMaker(object):
 				[o['quantity'] for o in [o for o in self.client.getopenorders() if o['direction'] == 'sell']])
 
 			posNet = posOB + posOpn
-			posNet2 = posNet + (10 / 100 * posNet)
 			Margin = avg_price * (PCT / 8)  # 8 = arbitrase aja
 			avg_priceAdj = abs(avg_price) * (PCT / 2)  # up/down, 2= arbitrase aja
 			avg_down = abs(avg_price) - abs(avg_priceAdj)
@@ -248,7 +253,7 @@ class MarketMaker(object):
 			place_bids = 'true'
 			place_asks = 'true'
 
-			print('posOpn', posOpn, 'posOB', posOB, 'posNet', posNet, 'posNet2', posNet2, 'avg_price', avg_price, MM,
+			print('posOpn', posOpn, 'posOB', posOB, 'posNet', posNet, 'avg_price', avg_price, MM,
 			      'MM')
 			if not place_bids and not place_asks:
 				print('No bid no offer for %s' % fut)
@@ -304,7 +309,7 @@ class MarketMaker(object):
 					offerOB = bid_mkt
 
 					print('BIDS', offerOB, 'posOpn', posOpn, 'posOB', posOB, 'posNet', posNet, 'avg_price', avg_price,
-					      'avg_pricedown', avg_down, 'imb', imb)
+					      'avg_pricedown', avg_down, 'imb', imb,posFut,'posFut')
 
 					# cek posisi awal
 					if posOpn == 0:
@@ -315,7 +320,7 @@ class MarketMaker(object):
 						elif avg_price < 0:
 							prc = min(bid_mkt, (abs(avg_price) - abs(Margin)))
 						# average down
-						elif avg_price > 0 and bid_mkt < avg_price:
+						elif avg_price > 0 and bid_mkt < avg_price and posFut < 11 :
 							prc = min(bid_mkt, abs(avg_down))
 							print('prc down', prc)
 
@@ -340,9 +345,9 @@ class MarketMaker(object):
 							prc = 0
 
 					# sudah ada posisi long
-					elif avg_price > 0:
+					elif avg_price > 0 :
 						# posisi rugi, average down
-						if bid_mkt < avg_price:
+						if bid_mkt < avg_price and posFut < 6:
 							prc = min(bid_mkt, abs(avg_down))
 							print('prc downn', prc)
 
@@ -371,16 +376,15 @@ class MarketMaker(object):
 						except (SystemExit, KeyboardInterrupt):
 							raise
 						except Exception as e:
-							self.logger.warning('Bid order failed: %s bid for %s'
-							                    % (prc, qty))
+							self.logger.warning('Bid order failed: '
+							                   )
 				else:
 					try:
 						self.client.buy(fut, qty, prc, 'true')
 					except (SystemExit, KeyboardInterrupt):
 						raise
 					except Exception as e:
-						self.logger.warning('Bid order failed: %s bid for %s'
-						                    % (prc, qty))
+						self.logger.warning('Bid order failed')
 
 				# OFFERS
 
@@ -389,7 +393,7 @@ class MarketMaker(object):
 					offerOB = ask_mkt
 
 					print('OFFERS', offerOB, 'posOpn', posOpn, 'posOB', posOB, 'posNet', posNet, 'avg_price', avg_price,
-					      'avg_priceAdj', avg_up, 'imb', imb)
+					      'avg_priceAdj', avg_up, 'imb', imb,posFut,'posFut')
 
 					# cek posisi awal
 					if posOpn == 0:
@@ -403,7 +407,7 @@ class MarketMaker(object):
 							print('prc up', prc)
 
 						# average up
-						elif avg_price < 0 and bid_mkt > avg_price:
+						elif avg_price < 0 and bid_mkt > avg_price and posFut < 11:
 							prc = max(bid_mkt, abs(avg_up))
 
 						else:
@@ -431,7 +435,7 @@ class MarketMaker(object):
 					elif avg_price < 0:
 
 						# posisi rugi, average up
-						if bid_mkt > avg_price:
+						if bid_mkt > avg_price and posFut < 6:
 							prc = max(bid_mkt, abs(avg_up))
 							print('prc up', prc)
 
@@ -442,37 +446,37 @@ class MarketMaker(object):
 					elif avg_price > 0:
 						prc = max(bid_mkt, (abs(avg_price) + abs(Margin)))
 
-
 					else:
 						prc = 0
 
 						qty = 1
 
-					if i < len_ask_ords:
-						oid = ask_ords[i]['orderId']
-						try:
-							self.client.edit(oid, qty, prc)
-						except (SystemExit, KeyboardInterrupt):
-							raise
-						except:
-							try:
-								self.client.sell(fut, qty, prc, 'true')
-								cancel_oids.append(oid)
-								self.logger.warning('Sell Edit failed for %s' % oid)
-							except (SystemExit, KeyboardInterrupt):
-								raise
-							except Exception as e:
-								self.logger.warning('Offer order failed: %s at %s'
-								                    % (qty, prc))
-
-					else:
+				if i < len_ask_ords:
+					oid = ask_ords[i]['orderId']
+					try:
+						self.client.edit(oid, qty, prc)
+					except (SystemExit, KeyboardInterrupt):
+						raise
+					except:
 						try:
 							self.client.sell(fut, qty, prc, 'true')
+							cancel_oids.append(oid)
+							self.logger.warning('Sell Edit failed for %s' % oid)
 						except (SystemExit, KeyboardInterrupt):
 							raise
 						except Exception as e:
-							self.logger.warning('Offer order failed: %s at %s'
-							                    % (qty, prc))
+							self.logger.warning('Offer order failed: '
+							                    )
+
+				else:
+					try:
+						self.client.sell(fut, qty, prc, 'true')
+					except (SystemExit, KeyboardInterrupt):
+						raise
+					except Exception as e:
+						self.logger.warning('Offer order failed: %s at %s'
+						                    % (qty, prc))
+
 			if nbids > len(bid_ords):
 				cancel_oids += [o['orderId'] for o in bid_ords[nbids:]]
 			if nasks > len(ask_ords):
