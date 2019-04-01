@@ -253,8 +253,8 @@ class MarketMaker(object):
 			place_bids = 'true'
 			place_asks = 'true'
 
-			print('posOpn', posOpn, 'posOB', posOB, 'posNet', posNet, 'avg_price', avg_price, MM,
-			      'MM')
+			#print('posOpn', posOpn, 'posOB', posOB, 'posNet', posNet, 'avg_price', avg_price, MM,
+			 #     'MM')
 			if not place_bids and not place_asks:
 				print('No bid no offer for %s' % fut)
 				continue
@@ -308,8 +308,8 @@ class MarketMaker(object):
 
 					offerOB = bid_mkt
 
-					print('BIDS', offerOB, 'posOpn', posOpn, 'posOB', posOB, 'posNet', posNet, 'avg_price', avg_price,
-					      'avg_pricedown', avg_down, 'imb', imb,posFut,'posFut')
+					#print('BIDS', offerOB, 'posOpn', posOpn, 'posOB', posOB, 'posNet', posNet, 'avg_price', avg_price,
+					  #    'avg_pricedown', avg_down, 'imb', imb,posFut,'posFut')
 
 					# cek posisi awal
 					if posOpn == 0:
@@ -322,7 +322,6 @@ class MarketMaker(object):
 						# average down
 						elif avg_price > 0 and bid_mkt < avg_price and posFut < 11 :
 							prc = min(bid_mkt, abs(avg_down))
-							print('prc down', prc)
 
 						else:
 							prc = 0
@@ -345,11 +344,15 @@ class MarketMaker(object):
 							prc = 0
 
 					# sudah ada posisi long
-					elif avg_price > 0 :
+					elif avg_price > 0  :
 						# posisi rugi, average down
-						if bid_mkt < avg_price and posFut < 6:
+						if bid_mkt < avg_price and posFut < 11:
 							prc = min(bid_mkt, abs(avg_down))
-							print('prc downn', prc)
+							
+
+						else:
+							prc = 0
+
 
 					# sudah ada short, ambil laba
 					elif avg_price < 0:
@@ -392,8 +395,8 @@ class MarketMaker(object):
 
 					offerOB = ask_mkt
 
-					print('OFFERS', offerOB, 'posOpn', posOpn, 'posOB', posOB, 'posNet', posNet, 'avg_price', avg_price,
-					      'avg_priceAdj', avg_up, 'imb', imb,posFut,'posFut')
+					#print('OFFERS', offerOB, 'posOpn', posOpn, 'posOB', posOB, 'posNet', posNet, 'avg_price', avg_price,
+					   #   'avg_priceAdj', avg_up, 'imb', imb,posFut,'posFut')
 
 					# cek posisi awal
 					if posOpn == 0:
@@ -404,7 +407,7 @@ class MarketMaker(object):
 						# sudah ada posisi short, buat posisi beli
 						elif avg_price > 0:
 							prc = max(bid_mkt, (abs(avg_price) + abs(Margin)))
-							print('prc up', prc)
+							
 
 						# average up
 						elif avg_price < 0 and bid_mkt > avg_price and posFut < 11:
@@ -435,9 +438,9 @@ class MarketMaker(object):
 					elif avg_price < 0:
 
 						# posisi rugi, average up
-						if bid_mkt > avg_price and posFut < 6:
+						if bid_mkt > avg_price and posFut < 11:
 							prc = max(bid_mkt, abs(avg_up))
-							print('prc up', prc)
+							
 
 						else:
 							prc = 0
