@@ -3,6 +3,7 @@ from collections import OrderedDict
 from datetime import datetime
 from os.path import getmtime
 from time import sleep
+from datetime import datetime, timedelta
 from utils import (get_logger, print_dict_of_dicts, sort_by_key,
                    ticksize_ceil, ticksize_floor)
 
@@ -486,7 +487,15 @@ class MarketMaker(object):
 		if posOpn > -12 or MM > (20/100):
 			email_msg = """Posisi bersih %s, Maintenance margin %s.""" % (posOpn,math.floor(MM*100))
 			trigger_email(email_msg)
+			
+		while 1:
+			email_msg = """pnl USD %s, pnl btc %s.""" % (math.floor(pnl_usd),math.floor(pnl_btc))
+			trigger_email(email_msg)
+			dt = datetime.now() + timedelta(hours=1)
+			dt = dt.replace(minute=1)
 
+			while datetime.now() < dt:
+				time.sleep(1)
 
 	def restart(self):
 		try:
