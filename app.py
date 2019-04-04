@@ -484,8 +484,8 @@ class MarketMaker(object):
 				except:
 					self.logger.warning('Order cancellations failed: %s' % oid)
 
-		if posOpn > -12 or MM > (20/100):
-			email_msg = """Posisi bersih %s, Maintenance margin %s.""" % (posOpn,math.floor(MM*100))
+		if posOpn > 12 or posOpn < (-12) or MM > (20/100):
+			email_msg = """Posisi bersih %s, Maintenance margin %s.""" % (posOpn,MM)
 			trigger_email(email_msg)
 			
 		while 1:
