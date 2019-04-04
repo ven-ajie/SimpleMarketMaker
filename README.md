@@ -10,3 +10,6 @@ to do:
   c) perform multi accounts task
 
 - refresh/tidy up/improve efficiency bot code
+- add eth
+- add/improve bot code related to e mail/time/telegram
+
