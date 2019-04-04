@@ -489,10 +489,10 @@ class MarketMaker(object):
 			trigger_email(email_msg)
 			
 		while 1:
-			email_msg = """pnl USD %s, pnl btc %s.""" % (math.floor(pnl_usd),math.floor(pnl_btc))
+			email_msg = """pnl USD %s, pnl btc %s """ % (round(pnl_usd),round(pnl_btc))
 			trigger_email(email_msg)
 			dt = datetime.now() + timedelta(hours=1)
-			dt = dt.replace(minute=1)
+			dt = dt.replace(minute=59)
 
 			while datetime.now() < dt:
 				time.sleep(1)
