@@ -8,12 +8,14 @@ from utils import (get_logger, print_dict_of_dicts, sort_by_key,
 
 import copy as cp
 import argparse, logging, math, os, sys, time, traceback
+import smtplib
 
 from api import RestClient
 
 KEY = 'AVmfiQceujWF'
 SECRET = '33WJ3QOFCBJMUB24OOYANJGWWSVG7RP5'
 URL = 'https://test.deribit.com'
+
 
 # Add command line switches
 parser = argparse.ArgumentParser(description='Bot')
@@ -74,7 +76,6 @@ PCT_QTY_BASE *= BP
 VOL_PRIOR *= PCT
 
 
-
 class MarketMaker(object):
 
 	def __init__(self, monitor=True, output=True):
@@ -100,7 +101,6 @@ class MarketMaker(object):
 
 	def create_client(self):
 		self.client = RestClient(KEY, SECRET, URL)
-
 
 	def get_bbo(self, contract):  # Get best b/o excluding own orders
 
@@ -193,21 +193,26 @@ class MarketMaker(object):
 
 		self.update_status()
 
-		now = datetime.utcnow()
-		days = (now - self.start_time).total_seconds() / SECONDS_IN_DAY
-		print('********************************************************************')
-
-		print_dict_of_dicts({
-			k: {
-				'Contracts': self.positions[k]['size']
-			} for k in self.positions.keys()
-		},
-			title='Positions')
-
 		print('')
 
 	def place_orders(self):
 
+		def trigger_email(msg):
+				email_usr = "email_usre@gmail.com"  # <---bot email!
+				email_psw = "1234"  # <-- bot password!
+				smtp_server = "smtp.gmail.com"
+				smtp_port = 587
+				email_from = "email_usr@gmail.com"  # <--bot email!
+				email_to = "user@gmail.com"  # <--receive email!
+				server = smtplib.SMTP(smtp_server, smtp_port)
+				server.starttls()
+				server.login(email_usr, email_psw)
+
+				server.sendmail(email_from, email_to, msg)
+				server.quit()
+
+				
+				
 		if self.monitor:
 			return None
 
@@ -230,15 +235,19 @@ class MarketMaker(object):
 			posOB = sum(
 				[o['quantity'] for o in [o for o in self.client.getopenorders() if o['direction'] == 'buy']]) - sum(
 				[o['quantity'] for o in [o for o in self.client.getopenorders() if o['direction'] == 'sell']])
-			posOBBid = sum([o['quantity'] for o in [o for o in self.client.getopenorders() if o['direction'] == 'buy']])
-			posOBAsk = sum(
-				[o['quantity'] for o in [o for o in self.client.getopenorders() if o['direction'] == 'sell']])
+			posFutBid = sum([o['amount'] for o in [o for o in self.client.positions() if o['direction'] == 'buy']])
+			posfutAsk = sum(
+				[o['amount'] for o in [o for o in self.client.positions() if o['direction'] == 'sell']])
 
+			NetPosFut=(posFutBid+posfutAsk)/10
 			posNet = posOB + posOpn
-			Margin = avg_price * (PCT / 8)  # 8 = arbitrase aja
-			avg_priceAdj = abs(avg_price) * (PCT / 2)  # up/down, 2= arbitrase aja
+			Margin = avg_price * (PCT / 4)  # 8 = arbitrase aja
+			avg_priceAdj = abs(avg_price) * (PCT)  # up/down, 2= arbitrase aja
 			avg_down = abs(avg_price) - abs(avg_priceAdj)
 			avg_up = abs(avg_price) + abs(avg_priceAdj)
+			avg_priceAdj2 = abs(avg_price) * PCT * 2  # up/down, mengimbangi kenaikan/penurunan harga, arbitrase aja
+			avg_down2 = abs(avg_price) - abs(avg_priceAdj2)
+			avg_up2 = abs(avg_price) + abs(avg_priceAdj2)
 
 			# Me
 
@@ -248,8 +257,6 @@ class MarketMaker(object):
 			place_bids = 'true'
 			place_asks = 'true'
 
-			#print('posOpn', posOpn, 'posOB', posOB, 'posNet', posNet, 'avg_price', avg_price, MM,
-			 #     'MM')
 			if not place_bids and not place_asks:
 				print('No bid no offer for %s' % fut)
 				continue
@@ -303,19 +310,18 @@ class MarketMaker(object):
 
 					offerOB = bid_mkt
 
-					#print('BIDS', offerOB, 'posOpn', posOpn, 'posOB', posOB, 'posNet', posNet, 'avg_price', avg_price,
-					  #    'avg_pricedown', avg_down, 'imb', imb,posFut,'posFut')
-
 					# cek posisi awal
 					if posOpn == 0:
 						# posisi baru mulai, order bila bid>ask (memperkecil resiko salah)
-						if avg_price == 0 and imb > 0:
+						if avg_price == 0 and imb > 0 and posOpn <= 0:
 							prc = bid_mkt
+
 						# sudah ada posisi short, buat posisi beli
-						elif avg_price < 0:
+						elif avg_price < 0 and posFut > 4:
 							prc = min(bid_mkt, (abs(avg_price) - abs(Margin)))
+
 						# average down
-						elif avg_price > 0 and bid_mkt < avg_price and posFut < 11 :
+						elif avg_price > 0 and bid_mkt < avg_price and posFut < 11:
 							prc = min(bid_mkt, abs(avg_down))
 
 						else:
@@ -323,41 +329,39 @@ class MarketMaker(object):
 
 					# net sudah ada posisi, individual masih kosong
 					elif avg_price == 0:
-						# mencegah bid makin menambah posisi long
-						# if posOpn > posNet2:
-						#	prc = 0
 
 						# menyeimbangkan posisi
 						if posNet < 0:
-
 							prc = bid_mkt
-
-						#elif imb > 0:
-						#	prc = bid_mkt
 
 						else:
 							prc = 0
 
 					# sudah ada posisi long
-					elif avg_price > 0  :
+					elif avg_price > 0 :
 						# posisi rugi, average down
 						if bid_mkt < avg_price and posFut < 11:
 							prc = min(bid_mkt, abs(avg_down))
-							
+
+						# posisi laba, kejar balance 0
+						elif bid_mkt  >  avg_up2 and NetPosFut <0:
+							prc = bid_mkt
 
 						else:
 							prc = 0
 
-
 					# sudah ada short, ambil laba
 					elif avg_price < 0:
-						prc = min(bid_mkt, (abs(avg_price) - abs(Margin)))
+						if posFut > 4:
+							prc = min(bid_mkt, abs(avg_down))
+
+						else:
+							prc = 0
 
 					else:
 						prc = 0
 
 					qty = 1
-
 
 				if i < len_bid_ords:
 
@@ -375,7 +379,7 @@ class MarketMaker(object):
 							raise
 						except Exception as e:
 							self.logger.warning('Bid order failed: '
-							                   )
+							                    )
 				else:
 					try:
 						self.client.buy(fut, qty, prc, 'true')
@@ -390,19 +394,16 @@ class MarketMaker(object):
 
 					offerOB = ask_mkt
 
-					#print('OFFERS', offerOB, 'posOpn', posOpn, 'posOB', posOB, 'posNet', posNet, 'avg_price', avg_price,
-					   #   'avg_priceAdj', avg_up, 'imb', imb,posFut,'posFut')
-
 					# cek posisi awal
 					if posOpn == 0:
 
 						# posisi baru mulai, order bila bid>ask (memperkecil resiko salah)
-						if avg_price == 0 and imb < 0:
+						if avg_price == 0 and imb < 0 and posOpn >= 0:
 							prc = bid_mkt
-						# sudah ada posisi short, buat posisi beli
-						elif avg_price > 0:
+
+						# sudah ada posisi long, buat posisi jual
+						elif avg_price > 0 and posFut > 4:
 							prc = max(bid_mkt, (abs(avg_price) + abs(Margin)))
-							
 
 						# average up
 						elif avg_price < 0 and bid_mkt > avg_price and posFut < 11:
@@ -414,17 +415,9 @@ class MarketMaker(object):
 					# net sudah ada posisi, individual masih kosong
 					elif avg_price == 0:
 
-						# mencegah bid makin menambah posisi short
-						# if posOpn > posNet2:
-						#	prc = 0
-
 						# menyeimbangkan posisi
 						if posNet > 0:
 							prc = bid_mkt
-
-						# order bila bid>ask (memperkecil resiko salah)
-						#elif imb < 0:
-						#	prc = bid_mkt
 
 						else:
 							prc = 0
@@ -435,14 +428,19 @@ class MarketMaker(object):
 						# posisi rugi, average up
 						if bid_mkt > avg_price and posFut < 11:
 							prc = max(bid_mkt, abs(avg_up))
-							
 
+						# posisi laba, kejar balance 0
+						elif  bid_mkt  < avg_down2 and NetPosFut > 0:
+							prc = bid_mkt
 						else:
 							prc = 0
 
 					# sudah ada long, ambil laba
 					elif avg_price > 0:
-						prc = max(bid_mkt, (abs(avg_price) + abs(Margin)))
+						if posFut > 4:
+							prc = max(bid_mkt, (abs(avg_price) + abs(Margin)))
+						else:
+							prc = 0
 
 					else:
 						prc = 0
@@ -484,6 +482,11 @@ class MarketMaker(object):
 					self.client.cancel(oid)
 				except:
 					self.logger.warning('Order cancellations failed: %s' % oid)
+
+		if posOpn > -12 or MM > (20/100):
+			email_msg = """Posisi bersih %s, Maintenance margin %s.""" % (posOpn,math.floor(MM*100))
+			trigger_email(email_msg)
+
 
 	def restart(self):
 		try:
@@ -685,4 +688,3 @@ if __name__ == '__main__':
 		print(traceback.format_exc())
 		if args.restart:
 			mmbot.restart()
-
