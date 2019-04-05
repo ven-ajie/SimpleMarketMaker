@@ -156,19 +156,7 @@ class MarketMaker(object):
 
 		self.futures_prv = cp.deepcopy(self.futures)
 
-		insts = [{'kind': 'future', 'baseCurrency': 'BTC', 'currency': 'USD', 'minTradeSize': 1,
-		          'instrumentName': 'BTC-PERPETUAL', 'isActive': True, 'settlement': 'perpetual',
-		          'created': '2018-08-14 10:24:47 GMT', 'tickSize': 0.25, 'pricePrecision': 1,
-		          'expiration': '3000-01-01 08:00:00 GMT', 'contractSize': 10.0},
-		         {'kind': 'future', 'baseCurrency': 'BTC', 'currency': 'USD', 'minTradeSize': 1,
-		          'instrumentName': 'BTC-28JUN19', 'isActive': True, 'settlement': 'month',
-		          'created': '2018-12-29 08:01:00 GMT', 'tickSize': 0.25, 'pricePrecision': 1,
-		          'expiration': '2019-06-28 08:00:00 GMT', 'contractSize': 10.0},
-
-		         {'kind': 'future', 'baseCurrency': 'BTC', 'currency': 'USD', 'minTradeSize': 1,
-		          'instrumentName': 'BTC-27SEP19', 'isActive': True, 'settlement': 'month',
-		          'created': '2018-10-04 04:51:34 GMT', 'tickSize': 0.25, 'pricePrecision': 1,
-		          'expiration': '2019-03-29 08:00:00 GMT', 'contractSize': 10.0}]
+		insts = self.client.getinstruments()
 		self.futures = sort_by_key({
 			i['instrumentName']: i for i in insts if i['kind'] == 'future'
 		})
