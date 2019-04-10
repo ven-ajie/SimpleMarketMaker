@@ -17,7 +17,6 @@ KEY = 'AVmfiQceujWF'
 SECRET = '33WJ3QOFCBJMUB24OOYANJGWWSVG7RP5'
 URL = 'https://test.deribit.com'
 
-
 # Add command line switches
 parser = argparse.ArgumentParser(description='Bot')
 
@@ -167,7 +166,8 @@ class MarketMaker(object):
 				'%Y-%m-%d %H:%M:%S')
 
 	def get_spot(self):
-		return self.client.index()['btc']
+		return self.client.index()['btc'] 
+
 
 	def get_precision(self, contract):
 		return self.futures[contract]['pricePrecision']
@@ -185,22 +185,7 @@ class MarketMaker(object):
 		print('')
 
 	def place_orders(self):
-
-		def trigger_email(msg):
-				email_usr = "email_usre@gmail.com"  # <---bot email!
-				email_psw = "1234"  # <-- bot password!
-				smtp_server = "smtp.gmail.com"
-				smtp_port = 587
-				email_from = "email_usr@gmail.com"  # <--bot email!
-				email_to = "user@gmail.com"  # <--receive email!
-				server = smtplib.SMTP(smtp_server, smtp_port)
-				server.starttls()
-				server.login(email_usr, email_psw)
-
-				server.sendmail(email_from, email_to, msg)
-				server.quit()
-
-				
+		
 				
 		if self.monitor:
 			return None
@@ -208,17 +193,18 @@ class MarketMaker(object):
 		for fut in self.futures.keys():
 
 			try:
-				avg_price = self.positions[fut]['averagePrice'] * (
+							MM = self.client.account()['initialMargin'] / self.client.account()['marginBalance']
+							avg_price = self.positions[fut]['averagePrice'] * (
 						self.positions[fut]['size'] / abs(self.positions[fut]['size']))
 			except:
 				avg_price = 0
+				MM = 0
 
 			spot = self.get_spot()
-
+	
 			# Me
 
 			imb = self.get_bbo(fut)['imbalance']
-			MM = self.client.account()['initialMargin'] / self.client.account()['marginBalance']
 			posOpn = sum(OrderedDict({k: self.positions[k]['size'] for k in self.futures.keys()}).values())
 			posFut = abs(self.positions[fut]['size'])
 			posOB = sum(
@@ -230,16 +216,13 @@ class MarketMaker(object):
 
 			NetPosFut=(posFutBid+posfutAsk)/10
 			posNet = posOB + posOpn
-			Margin = avg_price * (PCT / 4)  # 8 = arbitrase aja
+			Margin = avg_price * (PCT / 4)  # 4 = arbitrase aja
 			avg_priceAdj = abs(avg_price) * (PCT)  # up/down, 2= arbitrase aja
 			avg_down = abs(avg_price) - abs(avg_priceAdj)
 			avg_up = abs(avg_price) + abs(avg_priceAdj)
-			avg_priceAdj2 = abs(avg_price) * PCT * 2  # up/down, mengimbangi kenaikan/penurunan harga, arbitrase aja
+			avg_priceAdj2 = abs(avg_price) * PCT * 1  # up/down, mengimbangi kenaikan/penurunan harga, arbitrase aja
 			avg_down2 = abs(avg_price) - abs(avg_priceAdj2)
 			avg_up2 = abs(avg_price) + abs(avg_priceAdj2)
-
-			# Me
-
 			nbids = 1
 			nasks = 1
 
@@ -251,6 +234,7 @@ class MarketMaker(object):
 				continue
 
 			tsz = self.get_ticksize(fut)
+			
 			# Perform pricing
 			vol = max(self.vols[BTC_SYMBOL], self.vols[fut])
 
@@ -310,7 +294,7 @@ class MarketMaker(object):
 							prc = min(bid_mkt, (abs(avg_price) - abs(Margin)))
 
 						# average down
-						elif avg_price > 0 and bid_mkt < avg_price and posFut < 11:
+						elif avg_price > 0 and bid_mkt < avg_price and posFut < 9:
 							prc = min(bid_mkt, abs(avg_down))
 
 						else:
@@ -329,11 +313,15 @@ class MarketMaker(object):
 					# sudah ada posisi long
 					elif avg_price > 0 :
 						# posisi rugi, average down
-						if bid_mkt < avg_price and posFut < 11:
+						if bid_mkt < avg_price and posFut < 9:
 							prc = min(bid_mkt, abs(avg_down))
 
 						# posisi laba, kejar balance 0
 						elif bid_mkt  >  avg_up2 and NetPosFut <0:
+							prc = bid_mkt
+							
+						# posisi idle, kejar balance <> 0
+						elif posFut < 5:
 							prc = bid_mkt
 
 						else:
@@ -395,7 +383,7 @@ class MarketMaker(object):
 							prc = max(bid_mkt, (abs(avg_price) + abs(Margin)))
 
 						# average up
-						elif avg_price < 0 and bid_mkt > avg_price and posFut < 11:
+						elif avg_price < 0 and bid_mkt > avg_price and posFut < 9:
 							prc = max(bid_mkt, abs(avg_up))
 
 						else:
@@ -415,12 +403,17 @@ class MarketMaker(object):
 					elif avg_price < 0:
 
 						# posisi rugi, average up
-						if bid_mkt > avg_price and posFut < 11:
+						if bid_mkt > avg_price and posFut < 9:
 							prc = max(bid_mkt, abs(avg_up))
 
 						# posisi laba, kejar balance 0
 						elif  bid_mkt  < avg_down2 and NetPosFut > 0:
 							prc = bid_mkt
+							
+						# posisi idle, kejar balance <> 0
+						elif posFut < 5:
+							prc = bid_mkt
+						
 						else:
 							prc = 0
 
@@ -471,20 +464,7 @@ class MarketMaker(object):
 					self.client.cancel(oid)
 				except:
 					self.logger.warning('Order cancellations failed: %s' % oid)
-
-		if posOpn > 12 or posOpn < (-12) or MM > (20/100):
-			email_msg = """Posisi bersih %s, Maintenance margin %s.""" % (posOpn,MM)
-			trigger_email(email_msg)
-			
-		while 1:
-			email_msg = """pnl USD %s, pnl btc %s """ % (round(pnl_usd),round(pnl_btc))
-			trigger_email(email_msg)
-			dt = datetime.now() + timedelta(hours=1)
-			dt = dt.replace(minute=59)
-
-			while datetime.now() < dt:
-				time.sleep(1)
-
+        
 	def restart(self):
 		try:
 			strMsg = 'RESTARTING'
@@ -591,16 +571,6 @@ class MarketMaker(object):
 		account = self.client.account()
 		spot = self.get_spot()
 
-		self.equity_btc = account['equity']
-		self.equity_usd = self.equity_btc * spot
-
-		self.update_positions()
-
-		self.deltas = OrderedDict(
-			{k: self.positions[k]['sizeBtc'] for k in self.futures.keys()}
-		)
-		self.deltas[BTC_SYMBOL] = account['equity']
-
 	def update_positions(self):
 
 		self.positions = OrderedDict({f: {
@@ -685,3 +655,4 @@ if __name__ == '__main__':
 		print(traceback.format_exc())
 		if args.restart:
 			mmbot.restart()
+
