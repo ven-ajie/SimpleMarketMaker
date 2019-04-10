@@ -7,14 +7,14 @@ Always start by running a trading bot in test server and do not engage money bef
 
 It is strongly recommend you to have coding and Python knowledge. Do not hesitate to read the source code and understand the mechanism of this bot.
 
-to do:
+# improvements:
 - additional ability to:
   a) respond to strong market movement (both of qty and price)
   b) change bid/ask based on certain parameters (equity, maintenance margin, etc)
   c) perform multi accounts task
 
 - refresh/tidy up/improve efficiency bot code
-- add eth
+- add eth qty (x10)
 - add/improve bot code related to e mail/time/telegram
 
 
