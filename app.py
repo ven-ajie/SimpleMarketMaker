@@ -165,6 +165,9 @@ class MarketMaker(object):
 				v['expiration'][: -4],
 				'%Y-%m-%d %H:%M:%S')
 
+	def get_perpetual (self, contract):
+		return self.futures[contract]['instrumentName'] [-9:]
+	
 	def get_spot(self):
 		return self.client.index()['btc'] 
 
@@ -193,9 +196,10 @@ class MarketMaker(object):
 		for fut in self.futures.keys():
 
 			try:
-							MM = self.client.account()['initialMargin'] / self.client.account()['marginBalance']
-							avg_price = self.positions[fut]['averagePrice'] * (
+				MM = self.client.account()['initialMargin'] / self.client.account()['marginBalance']
+				avg_price = self.positions[fut]['averagePrice'] * (
 						self.positions[fut]['size'] / abs(self.positions[fut]['size']))
+				 
 			except:
 				avg_price = 0
 				MM = 0
@@ -203,7 +207,7 @@ class MarketMaker(object):
 			spot = self.get_spot()
 	
 			# Me
-
+			instName = self.get_perpetual (fut)
 			imb = self.get_bbo(fut)['imbalance']
 			posOpn = sum(OrderedDict({k: self.positions[k]['size'] for k in self.futures.keys()}).values())
 			posFut = abs(self.positions[fut]['size'])
@@ -214,13 +218,15 @@ class MarketMaker(object):
 			posfutAsk = sum(
 				[o['amount'] for o in [o for o in self.client.positions() if o['direction'] == 'sell']])
 
+			PCTAdj = PCT*1 if instName == 'PERPETUAL' else PCT/2 # 1 / 2 = arbitrase aja
+			print (PCTAdj)
 			NetPosFut=(posFutBid+posfutAsk)/10
 			posNet = posOB + posOpn
-			Margin = avg_price * (PCT / 4)  # 4 = arbitrase aja
-			avg_priceAdj = abs(avg_price) * (PCT)  # up/down, 2= arbitrase aja
+			Margin = avg_price * (PCTAdj)  
+			avg_priceAdj = abs(avg_price) * (PCTAdj)  # up/down
 			avg_down = abs(avg_price) - abs(avg_priceAdj)
 			avg_up = abs(avg_price) + abs(avg_priceAdj)
-			avg_priceAdj2 = abs(avg_price) * PCT * 1  # up/down, mengimbangi kenaikan/penurunan harga, arbitrase aja
+			avg_priceAdj2 = abs(avg_price) * PCTAdj  # up/down, mengimbangi kenaikan/penurunan harga, arbitrase aja
 			avg_down2 = abs(avg_price) - abs(avg_priceAdj2)
 			avg_up2 = abs(avg_price) + abs(avg_priceAdj2)
 			nbids = 1
@@ -294,7 +300,7 @@ class MarketMaker(object):
 							prc = min(bid_mkt, (abs(avg_price) - abs(Margin)))
 
 						# average down
-						elif avg_price > 0 and bid_mkt < avg_price and posFut < 9:
+						elif avg_price > 0 and bid_mkt < avg_price and posFut < 20:
 							prc = min(bid_mkt, abs(avg_down))
 
 						else:
@@ -313,7 +319,7 @@ class MarketMaker(object):
 					# sudah ada posisi long
 					elif avg_price > 0 :
 						# posisi rugi, average down
-						if bid_mkt < avg_price and posFut < 9:
+						if bid_mkt < avg_price and posFut < 20:
 							prc = min(bid_mkt, abs(avg_down))
 
 						# posisi laba, kejar balance 0
@@ -321,7 +327,7 @@ class MarketMaker(object):
 							prc = bid_mkt
 							
 						# posisi idle, kejar balance <> 0
-						elif posFut < 5:
+						elif posFut <= 5:
 							prc = bid_mkt
 
 						else:
@@ -383,7 +389,7 @@ class MarketMaker(object):
 							prc = max(bid_mkt, (abs(avg_price) + abs(Margin)))
 
 						# average up
-						elif avg_price < 0 and bid_mkt > avg_price and posFut < 9:
+						elif avg_price < 0 and bid_mkt > avg_price and posFut <20:
 							prc = max(bid_mkt, abs(avg_up))
 
 						else:
@@ -403,7 +409,7 @@ class MarketMaker(object):
 					elif avg_price < 0:
 
 						# posisi rugi, average up
-						if bid_mkt > avg_price and posFut < 9:
+						if bid_mkt > avg_price and posFut < 20:
 							prc = max(bid_mkt, abs(avg_up))
 
 						# posisi laba, kejar balance 0
@@ -411,9 +417,9 @@ class MarketMaker(object):
 							prc = bid_mkt
 							
 						# posisi idle, kejar balance <> 0
-						elif posFut < 5:
+						elif posFut <= 5:
 							prc = bid_mkt
-						
+							
 						else:
 							prc = 0
 
@@ -655,4 +661,5 @@ if __name__ == '__main__':
 		print(traceback.format_exc())
 		if args.restart:
 			mmbot.restart()
+
 
