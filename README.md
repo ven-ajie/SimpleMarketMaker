@@ -16,6 +16,7 @@ It is strongly recommend you to have coding and Python knowledge. Do not hesitat
 - refresh/tidy up/improve efficiency bot code
 - add eth qty (x10)
 - add/improve bot code related to e mail/time/telegram
+- not fully delta neutral yet (still holding significant position in one side)
 
 
 
