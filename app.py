@@ -9,13 +9,14 @@ from utils import (get_logger, print_dict_of_dicts, sort_by_key,
 
 import copy as cp
 import argparse, logging, math, os, sys, time, traceback
-import smtplib
 
 from api import RestClient
 
 KEY = 'AVmfiQceujWF'
 SECRET = '33WJ3QOFCBJMUB24OOYANJGWWSVG7RP5'
 URL = 'https://test.deribit.com'
+
+
 
 # Add command line switches
 parser = argparse.ArgumentParser(description='Bot')
@@ -41,6 +42,7 @@ parser.add_argument('--no-restart',
                     action='store_false')
 
 args = parser.parse_args()
+
 
 BP = 1e-4  # one basis point
 BTC_SYMBOL = 'btc'
@@ -100,8 +102,10 @@ class MarketMaker(object):
 		self.vols = OrderedDict()
 
 	def create_client(self):
+	
 		self.client = RestClient(KEY, SECRET, URL)
-
+	
+	
 	def get_bbo(self, contract):  # Get best b/o excluding own orders
 
 		# Get orderbook
@@ -114,6 +118,16 @@ class MarketMaker(object):
 		ask_ords = [o for o in ords if o['direction'] == 'sell']
 		best_bid = None
 		best_ask = None
+
+		last_price = self.client.tradehistory(contract)
+		
+		try:
+			last_price_sell  = [o for o in last_price if o['side'] == 'sell']
+			last_price_buy  =  [o for o in last_price if o['side'] == 'buy']
+		
+		except:
+			last_price_sell  = 0
+			last_price_buy  =  0
 
 		# Me
 
@@ -148,7 +162,9 @@ class MarketMaker(object):
 				best_ask = a['price']
 				break
 
-		return {'bid': best_bid, 'ask': best_ask, 'imbalance': imbalance, 'imb_bids': imb_bids, 'imb_asks': imb_asks,
+		return {'last_price':last_price,'last_price_buy':last_price_buy,
+                        'last_price_sell': last_price_sell,'bid': best_bid, 'ask': best_ask,
+                        'imbalance': imbalance, 'imb_bids': imb_bids, 'imb_asks': imb_asks,
 		        'bids': bids, 'asks': asks, 'bid_ords': bid_ords, 'ask_ords': ask_ords}
 
 	def get_futures(self):  # Get all current futures instruments
@@ -157,7 +173,8 @@ class MarketMaker(object):
 
 		insts = self.client.getinstruments()
 		self.futures = sort_by_key({
-			i['instrumentName']: i for i in insts if i['kind'] == 'future'
+			i['instrumentName']: i for i in insts if i['kind'] == 'future' and 
+			i['baseCurrency'] == 'BTC'
 		})
 
 		for k, v in self.futures.items():
@@ -166,11 +183,10 @@ class MarketMaker(object):
 				'%Y-%m-%d %H:%M:%S')
 
 	def get_perpetual (self, contract):
-		return self.futures[contract]['instrumentName'] [-9:]
+		return self.futures[contract]['instrumentName'] 
 	
 	def get_spot(self):
 		return self.client.index()['btc'] 
-
 
 	def get_precision(self, contract):
 		return self.futures[contract]['pricePrecision']
@@ -196,44 +212,96 @@ class MarketMaker(object):
 		for fut in self.futures.keys():
 
 			try:
-				MM = self.client.account()['initialMargin'] / self.client.account()['marginBalance']
-				avg_price = self.positions[fut]['averagePrice'] * (
-						self.positions[fut]['size'] / abs(self.positions[fut]['size']))
+				
+				avg_price = self.positions[fut]['averagePrice'] * (self.positions[fut]['size'] / abs(self.positions[fut]['size'])
+							)
 				 
 			except:
 				avg_price = 0
-				MM = 0
-
+			
 			spot = self.get_spot()
-	
-			# Me
-			instName = self.get_perpetual (fut)
-			imb = self.get_bbo(fut)['imbalance']
-			posOpn = sum(OrderedDict({k: self.positions[k]['size'] for k in self.futures.keys()}).values())
-			posFut = abs(self.positions[fut]['size'])
-			posOB = sum(
-				[o['quantity'] for o in [o for o in self.client.getopenorders() if o['direction'] == 'buy']]) - sum(
-				[o['quantity'] for o in [o for o in self.client.getopenorders() if o['direction'] == 'sell']])
-			posFutBid = sum([o['amount'] for o in [o for o in self.client.positions() if o['direction'] == 'buy']])
-			posfutAsk = sum(
-				[o['amount'] for o in [o for o in self.client.positions() if o['direction'] == 'sell']])
 
-			PCTAdj = PCT*1 if instName == 'PERPETUAL' else PCT/2 # 1 / 2 = arbitrase aja
-			print (PCTAdj)
-			NetPosFut=(posFutBid+posfutAsk)/10
-			posNet = posOB + posOpn
-			Margin = avg_price * (PCTAdj)  
-			avg_priceAdj = abs(avg_price) * (PCTAdj)  # up/down
-			avg_down = abs(avg_price) - abs(avg_priceAdj)
-			avg_up = abs(avg_price) + abs(avg_priceAdj)
-			avg_priceAdj2 = abs(avg_price) * PCTAdj  # up/down, mengimbangi kenaikan/penurunan harga, arbitrase aja
+			# Me
+			#BasicQty
+			instName 	= self.get_perpetual (fut) 
+			imb 		= self.get_bbo(fut)['imbalance']
+			posOpn 		= sum(OrderedDict({k: self.positions[k]['size'] for k 
+							in self.futures.keys()}).values())
+			posFut 		= abs(self.positions[fut]['size'])#individual
+		
+			try:
+				last_price_buy1 = self.get_bbo(fut)['last_price_buy'][0] ['price'] 
+				last_price_sell1 = self.get_bbo(fut)['last_price_sell'][0] ['price'] 
+			except:
+				last_price_buy1 = 0
+				last_price_sell1 = 0
+		
+			diff_time 	= (self.client.gettime()/1000) - (self.get_bbo(fut)['last_price'][0] ['timeStamp']/1000
+							)
+
+			last_buy 	= last_price_buy1 - (last_price_buy1*PCT/2)
+			last_sell 	= abs(last_price_sell1) + abs((last_price_sell1*PCT/2))
+			posFutBid 	= sum([o['size'] for o in [o for o in self.client.positions () if 
+							o['direction'] == 'buy' and  o['currency'] == 'btc']]
+							)
+			posfutAsk 	= sum([o['size'] for o in [o for o in self.client.positions () if 
+							o['direction'] == 'sell' and  o['currency'] == 'btc']]
+							)
+			posfutOrdAsk= sum([o['quantity'] for o in [o for o in self.client.getopenorders(fut) if 
+							o['direction'] == 'sell' and  o['api'] == True ]]
+							)
+			posfutOrdBid = sum([o['quantity'] for o in [o for o in self.client.getopenorders(fut) if 
+							o['direction'] == 'buy'and  o['api'] == True]]
+							)
+		
+			NetPosFut=(posFutBid+posfutAsk)
+			PCTAdj = PCT/2 if instName [-9:] == 'PERPETUAL' else PCT/2 # 2 = arbitrase aja
+			PCTAdj0 = PCTAdj*1/2
+			PCTAdj1 = PCTAdj*1
+			PCTAdj2 = PCTAdj*2
+			PCTAdj3 = PCTAdj*5
+			PCTAdj4 = PCTAdj*10
+			PCTAdj5 = PCTAdj*20
+  	
+			Margin          = avg_price * PCTAdj  
+			avg_priceAdj    = abs(avg_price) * PCTAdj  # up/down
+			avg_down        = abs(avg_price) - abs(avg_priceAdj)
+			avg_up          = abs(avg_price) + abs(avg_priceAdj)
+			
+			avg_priceAdj0 = abs(avg_price) * PCTAdj0  # up/down, mengimbangi kenaikan/penurunan harga, arbitrase aja
+			avg_priceAdj1 = abs(avg_price) * PCTAdj1
+			avg_priceAdj2 = abs(avg_price) * PCTAdj2
+			avg_priceAdj3 = abs(avg_price) * PCTAdj3
+			avg_priceAdj4 = abs(avg_price) * PCTAdj4
+			avg_priceAdj5 = abs(avg_price) * PCTAdj5
+			
+			avg_down0 = abs(avg_price) - abs(avg_priceAdj0)
+			avg_down1 = abs(avg_price) - abs(avg_priceAdj1)
 			avg_down2 = abs(avg_price) - abs(avg_priceAdj2)
+			avg_down3 = abs(avg_price) - abs(avg_priceAdj3)
+			avg_down4 = abs(avg_price) - abs(avg_priceAdj4)
+			avg_down5 = abs(avg_price) - abs(avg_priceAdj5)
+
+			avg_up0 = abs(avg_price) + abs(avg_priceAdj0)
+			avg_up1 = abs(avg_price) + abs(avg_priceAdj1)
 			avg_up2 = abs(avg_price) + abs(avg_priceAdj2)
+			avg_up3 = abs(avg_price) + abs(avg_priceAdj3)
+			avg_up4 = abs(avg_price) + abs(avg_priceAdj4)
+			avg_up5 = abs(avg_price) + abs(avg_priceAdj5)
+
+			#Menghitung kuantitas beli/jual
+			# maks kuantitas by maks leverage
+			bal_btc         = self.client.account()[ 'equity' ]
+			qty_lvg = (bal_btc * spot * 80)/10 # 100%-20%
+			
+			qty_lvg0= max(1,round( qty_lvg * PCTAdj,0))
+
 			nbids = 1
 			nasks = 1
 
 			place_bids = 'true'
 			place_asks = 'true'
+
 
 			if not place_bids and not place_asks:
 				print('No bid no offer for %s' % fut)
@@ -283,64 +351,108 @@ class MarketMaker(object):
 				asks[0] = ticksize_ceil(asks[0], tsz)
 
 			for i in range(max(nbids, nasks)):
+			
+				print ('diff_time',diff_time)
+				print (instName,'posOpn',posOpn,'posFutBid',posFutBid,'posfutAsk',posfutAsk,'NetPosFut',NetPosFut)
+				print ('posfutOrdAsk posfutOrdBid',posfutOrdAsk, posfutOrdBid)
+				print (instName,'round( qty_lvg * PCTAdj,0)',round( qty_lvg * PCTAdj,0),'qty_lvg0',qty_lvg0,'qty_lvg0 * 2', qty_lvg0 *2, 'qty_lvg0 * 2', qty_lvg0 * 3)
+				print ('diff_time',diff_time)
 
-				# BIDS
+				if diff_time < 30 or posfutOrdAsk >1 or posfutOrdBid>1:
+					while True:
+						print ('diff_time 1',diff_time)
+						self.client.cancelall()   	
+
+					# BIDS
 				if place_bids:
 
 					offerOB = bid_mkt
-
+					
 					# cek posisi awal
-					if posOpn == 0:
+					if posOpn == 0 and abs(posfutOrdBid) < 2:
+						print ('# cek posisi awal')
 						# posisi baru mulai, order bila bid>ask (memperkecil resiko salah)
-						if avg_price == 0 and imb > 0 and posOpn <= 0:
-							prc = bid_mkt
+						if avg_price == 0 and imb > 0:
+							if instName [-9:] != 'PERPETUAL' :
+                                                 
+								prc = bid_mkt
 
-						# sudah ada posisi short, buat posisi beli
-						elif avg_price < 0 and posFut > 4:
-							prc = min(bid_mkt, (abs(avg_price) - abs(Margin)))
+							elif instName [-9:] == 'PERPETUAL' and posfutAsk != 0 and posFutBid != 0 or abs (posfutAsk)> qty_lvg0:
+                                                 
+								prc = bid_mkt
 
 						# average down
-						elif avg_price > 0 and bid_mkt < avg_price and posFut < 20:
-							prc = min(bid_mkt, abs(avg_down))
+						elif bid_mkt < avg_price and avg_price != 0:
 
-						else:
-							prc = 0
-
-					# net sudah ada posisi, individual masih kosong
-					elif avg_price == 0:
-
-						# menyeimbangkan posisi
-						if posNet < 0:
-							prc = bid_mkt
-
+							if  posFutBid < qty_lvg0 * 2:
+								prc = min(bid_mkt, abs(avg_down2), last_buy) if last_buy != 0 else min(bid_mkt, abs(avg_down2))
+							elif posFutBid < qty_lvg0 * 3:
+								prc = min(bid_mkt, abs(avg_down3), last_buy) if last_buy != 0 else min(bid_mkt, abs(avg_down3))
+							elif  posFutBid < qty_lvg0 * 4:
+								prc = min(bid_mkt, abs(avg_down4), last_buy) if last_buy != 0 else min(bid_mkt, abs(avg_down4))
+							elif posFutBid < qty_lvg0 * 5:
+								prc = min(bid_mkt, abs(avg_down5), last_buy) if last_buy != 0 else min(bid_mkt, abs(avg_down5))
+							else:
+								prc = 0
+							
 						else:
 							prc = 0
 
 					# sudah ada posisi long
-					elif avg_price > 0 :
+					elif avg_price > 0 and abs(posfutOrdBid) < 2:
+						print ('# sudah ada posisi long')
 						# posisi rugi, average down
-						if bid_mkt < avg_price and posFut < 20:
-							prc = min(bid_mkt, abs(avg_down))
 
+						if bid_mkt < avg_price and avg_price != 0:
+							if  posFutBid < qty_lvg0 * 2:
+								prc = min(bid_mkt, abs(avg_down2), last_buy) if last_buy != 0 else min(bid_mkt, abs(avg_down2))
+							elif posFutBid < qty_lvg0 * 3:
+								prc = min(bid_mkt, abs(avg_down3), last_buy) if last_buy != 0 else min(bid_mkt, abs(avg_down3))
+							elif  posFutBid < qty_lvg0 * 4:
+								prc = min(bid_mkt, abs(avg_down4), last_buy) if last_buy != 0 else min(bid_mkt, abs(avg_down4))
+							elif posFutBid < qty_lvg0 * 5:
+								prc = min(bid_mkt, abs(avg_down5), last_buy) if last_buy != 0 else min(bid_mkt, abs(avg_down5))
+							else:
+								prc = 0
+							
 						# posisi laba, kejar balance 0
-						elif bid_mkt  >  avg_up2 and NetPosFut <0:
+						elif bid_mkt  >  avg_up2 :
+							print ('posisi laba, kejar balance 0')
+							if abs(posfutAsk) < qty_lvg0 * 2 :
+								prc = min (bid_mkt, abs(avg_up2), last_sell) if last_buy != 0 else min(bid_mkt, abs(avg_up2))
+							elif abs(posfutAsk) < qty_lvg0 * 3:
+								prc = min(bid_mkt, abs(avg_up3), last_sell) if last_buy != 0 else min(bid_mkt, abs(avg_up3))
+							elif abs(posfutAsk) < qty_lvg0 * 4:
+								prc = min(bid_mkt, abs(avg_up4), last_sell) if last_buy != 0 else min(bid_mkt, abs(avg_up4))
+							elif abs(posfutAsk) < qty_lvg0 * 5:
+								prc = min(bid_mkt, abs(avg_up5), last_sell) if last_buy != 0 else min(bid_mkt, abs(avg_up5))
+							
+							else:
+								prc = 0
+
+												
+						# posisi idle, kejar balance <> 0
+						elif posFut <= qty_lvg0 and avg_price > 0 and avg_price != 0:
+							print ('posisi idle, kejar balance <> 0')
+							
 							prc = bid_mkt
 							
-						# posisi idle, kejar balance <> 0
-						elif posFut <= 5:
-							prc = bid_mkt
-
 						else:
 							prc = 0
 
 					# sudah ada short, ambil laba
-					elif avg_price < 0:
-						if posFut > 4:
-							prc = min(bid_mkt, abs(avg_down))
 
-						else:
+					elif avg_price < 0 and avg_price != 0 and abs(posfutOrdBid) < 2:
+						print ('sudah ada short, ambil laba')
+
+						if abs(posfutAsk) < qty_lvg0 * 2  :
 							prc = 0
-
+							print ('0',prc)
+                                            
+						else:
+							prc = min(bid_mkt, abs(avg_down), last_buy ) if last_buy != 0 else min(bid_mkt, abs(avg_down) )
+							print ('else',prc)
+							
 					else:
 						prc = 0
 
@@ -378,57 +490,98 @@ class MarketMaker(object):
 					offerOB = ask_mkt
 
 					# cek posisi awal
-					if posOpn == 0:
+					if posOpn == 0 and abs(posfutOrdAsk) < 2:
+						print ('posOpn', posOpn,'NetPosFut',NetPosFut,'imb',imb)
 
 						# posisi baru mulai, order bila bid>ask (memperkecil resiko salah)
-						if avg_price == 0 and imb < 0 and posOpn >= 0:
-							prc = bid_mkt
+						if avg_price == 0 and imb <  0:
+							if instName [-9:] != 'PERPETUAL' :
+                                                 
+								prc = bid_mkt
+								print ('avg_price == 0 OFFERS', instName,bid_mkt)
+
+							elif instName [-9:] == 'PERPETUAL' and posfutAsk and posFutBid != 0 or abs (posFutBid)> qty_lvg0:
+                                                 
+								prc = bid_mkt
+								print ('avg_price == 0 OFFERS', instName,bid_mkt)
 
 						# sudah ada posisi long, buat posisi jual
-						elif avg_price > 0 and posFut > 4:
-							prc = max(bid_mkt, (abs(avg_price) + abs(Margin)))
+						#elif avg_price > 0 and posFut > qty_lvg1:
+							
+						#	prc = max(bid_mkt, (abs(avg_price) + abs(Margin)))
 
 						# average up
-						elif avg_price < 0 and bid_mkt > avg_price and posFut <20:
-							prc = max(bid_mkt, abs(avg_up))
+	
+						elif bid_mkt > avg_price and avg_price != 0:
+							if abs(posfutAsk) < qty_lvg0 * 1:
+								prc = max(bid_mkt, abs(avg_up1), last_sell) if last_sell != 0 else max(bid_mkt, abs(avg_up1))
+							elif abs(posfutAsk) < qty_lvg0 * 2 :
+								prc = max(bid_mkt, abs(avg_up2), last_sell) if last_sell != 0 else max(bid_mkt, abs(avg_up2))
+								
 
-						else:
-							prc = 0
+							elif abs(posfutAsk) < qty_lvg0 * 3:
+								prc = max(bid_mkt, abs(avg_up3), last_sell) if last_sell != 0 else max(bid_mkt, abs(avg_up3))
+								
+							elif abs(posfutAsk) < qty_lvg0 * 4:
+								prc = max(bid_mkt, abs(avg_up4), last_sell) if last_sell != 0 else max(bid_mkt, abs(avg_up4))
+								
 
-					# net sudah ada posisi, individual masih kosong
-					elif avg_price == 0:
-
-						# menyeimbangkan posisi
-						if posNet > 0:
-							prc = bid_mkt
+							elif abs(posfutAsk) <  qty_lvg0 * 5:
+								prc = max(bid_mkt, abs(avg_up5), last_sell) if last_sell != 0 else max(bid_mkt, abs(avg_up5))
+								
 
 						else:
 							prc = 0
 
 					# sudah ada posisi short
-					elif avg_price < 0:
-
+					elif avg_price < 0 and abs(posfutOrdAsk) < 2:
 						# posisi rugi, average up
-						if bid_mkt > avg_price and posFut < 20:
-							prc = max(bid_mkt, abs(avg_up))
+						if bid_mkt > avg_price and avg_price != 0:
+
+							if abs(posfutAsk) < qty_lvg0 * 2:
+								prc = max(bid_mkt, abs(avg_up2), last_sell) if last_sell != 0 else max(bid_mkt, abs(avg_up2))
+							elif abs(posfutAsk) < qty_lvg0 * 3:
+								prc = max(bid_mkt, abs(avg_up3), last_sell) if last_sell != 0 else max(bid_mkt, abs(avg_up3))
+							elif abs(posfutAsk) < qty_lvg0 * 4:
+								prc = max(bid_mkt, abs(avg_up4), last_sell) if last_sell != 0 else max(bid_mkt, abs(avg_up4))
+							elif abs(posfutAsk) < qty_lvg0 * 5:
+								prc = max(bid_mkt, abs(avg_up5), last_sell) if last_sell != 0 else max(bid_mkt, abs(avg_up5))
+
+							else:
+								prc = 0
 
 						# posisi laba, kejar balance 0
-						elif  bid_mkt  < avg_down2 and NetPosFut > 0:
-							prc = bid_mkt
-							
+
+						elif  bid_mkt  < avg_down2 :
+
+							if  posFutBid < qty_lvg0 * 2:
+								prc = max(bid_mkt, abs(avg_down2), last_buy) if last_buy != 0 else max(bid_mkt, abs(avg_down2))
+							elif posFutBid < qty_lvg0 * 3:
+								prc = max(bid_mkt, abs(avg_down3), last_buy) if last_buy != 0 else max(bid_mkt, abs(avg_down3))
+							elif  posFutBid < qty_lvg0 * 4:
+								prc = max(bid_mkt, abs(avg_down4), last_buy) if last_buy != 0 else max(bid_mkt, abs(avg_down4))
+							elif posFutBid < qty_lvg0 * 5:
+								prc = max(bid_mkt, abs(avg_down5), last_buy) if last_buy != 0 else max(bid_mkt, abs(avg_down5))
+							else:
+								prc = 0							
 						# posisi idle, kejar balance <> 0
-						elif posFut <= 5:
+
+						elif posFut <= qty_lvg0 and avg_price < 0 and avg_price != 0:
+
 							prc = bid_mkt
 							
 						else:
 							prc = 0
 
 					# sudah ada long, ambil laba
-					elif avg_price > 0:
-						if posFut > 4:
-							prc = max(bid_mkt, (abs(avg_price) + abs(Margin)))
+
+					elif avg_price > 0 and avg_price != 0 and abs(posfutOrdAsk) < 2:
+		
+						if abs(posFutBid) < qty_lvg0*2 :
+								prc = 0
+				
 						else:
-							prc = 0
+							prc = max(bid_mkt, abs(avg_up), last_sell) if last_buy != 0 else max(bid_mkt, abs(avg_up))
 
 					else:
 						prc = 0
@@ -459,18 +612,21 @@ class MarketMaker(object):
 						raise
 					except Exception as e:
 						self.logger.warning('Offer order failed: %s at %s'
-						                    % (qty, prc))
+						                    )
 
 			if nbids > len(bid_ords):
 				cancel_oids += [o['orderId'] for o in bid_ords[nbids:]]
 			if nasks > len(ask_ords):
 				cancel_oids += [o['orderId'] for o in ask_ords[nasks:]]
+				
+		
 			for oid in cancel_oids:
 				try:
 					self.client.cancel(oid)
 				except:
 					self.logger.warning('Order cancellations failed: %s' % oid)
-        
+	
+
 	def restart(self):
 		try:
 			strMsg = 'RESTARTING'
@@ -493,10 +649,11 @@ class MarketMaker(object):
 
 		t_ts = t_out = t_loop = t_mtime = datetime.utcnow()
 
+				
 		while True:
 
 			self.get_futures()
-
+			
 			# Restart if a new contract is listed
 			if len(self.futures) != len(self.futures_prv):
 				self.restart()
@@ -550,6 +707,7 @@ class MarketMaker(object):
 		self.create_client()
 		self.client.cancelall()
 		self.logger = get_logger('root', LOG_LEVEL)
+
 		# Get all futures contracts
 		self.get_futures()
 		self.this_mtime = getmtime(__file__)
@@ -647,7 +805,6 @@ class MarketMaker(object):
 
 			self.vols[s] = math.sqrt(v)
 
-
 if __name__ == '__main__':
 
 	try:
@@ -661,5 +818,6 @@ if __name__ == '__main__':
 		print(traceback.format_exc())
 		if args.restart:
 			mmbot.restart()
+
 
 
