@@ -79,13 +79,12 @@ class RestClient(object):
     def getorderbook(self, instrument):
         return self.request("/api/v1/public/getorderbook", {'instrument': instrument})
 
-    def getinstruments(self):
-        return self.request("/api/v1/public/getinstruments", {})
+    def gettime(self):
+        return self.request("/api/v1/public/time", {})
 
 
     def getcurrencies(self):
         return self.request("/api/v1/public/getcurrencies", {})
-
 
     def getlasttrades(self, instrument, count=None, since=None):
         options = {
@@ -184,7 +183,6 @@ class RestClient(object):
     def positions(self):
         return self.request("/api/v1/private/positions", {})
 
-
     def orderhistory(self, count=None):
         options = {}
         if count:
@@ -204,3 +202,4 @@ class RestClient(object):
             options["startTradeId"] = startTradeId
 
         return self.request("/api/v1/private/tradehistory", options)
+
