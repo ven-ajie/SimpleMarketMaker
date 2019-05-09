@@ -234,14 +234,16 @@ class MarketMaker(object):
 			try:
 				last_price_buy1 = self.get_bbo(fut)['last_price_buy'][0] ['price'] 
 				last_price_sell1 = self.get_bbo(fut)['last_price_sell'][0] ['price'] 
+				diff_time 	= (self.client.gettime()/1000) - (self.get_bbo(fut)[
+							'last_price'][0] ['timeStamp']/1000
+							)
 			
 			except:
 				last_price_buy1 = 0
 				last_price_sell1 = 0
+				diff_time = 31 # 31 > 30
 		
-			diff_time 	= (self.client.gettime()/1000) - (self.get_bbo(fut)[
-							'last_price'][0] ['timeStamp']/1000
-							)
+			
 
 			last_buy 	= last_price_buy1 - (last_price_buy1*PCT/2)
 			last_sell 	= abs(last_price_sell1) + abs((last_price_sell1*PCT/2))
@@ -735,7 +737,5 @@ if __name__ == '__main__':
 		print(traceback.format_exc())
 		if args.restart:
 			mmbot.restart()
-
-
 
 
