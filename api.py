@@ -23,7 +23,7 @@ class RestClient(object):
                 raise Exception("Key or secret empty")
 
             signature = self.generate_signature(action, data)
-            response = self.session.post(self.url + action, data=data, headers={'x-deribit-sig': signature}, verify=True)
+            response = self.session.post(self.url + action, data=data, headers={'x-deribit-sig': signature}, verify=True)	
         else:
             response = self.session.get(self.url + action, params=data, verify=True)
 
@@ -79,6 +79,10 @@ class RestClient(object):
     def getorderbook(self, instrument):
         return self.request("/api/v1/public/getorderbook", {'instrument': instrument})
 
+
+    def getinstruments(self):
+        return self.request("/api/v1/public/getinstruments", {})
+
     def gettime(self):
         return self.request("/api/v1/public/time", {})
 
@@ -114,6 +118,9 @@ class RestClient(object):
 
     def account(self):
         return self.request("/api/v1/private/account",  {"ext": 'true'})
+				
+    def subaccounts(self):
+        return self.request("/api/v2/private/get_subaccounts",  {"with_portfolio": 'true'})
 
 
     def buy(self, instrument, quantity, price, postOnly=None, label=None):
@@ -145,7 +152,13 @@ class RestClient(object):
             options["postOnly"] = postOnly
 
         return self.request("/api/v1/private/sell", options)
+	
+        if label:
+            options["label"] = label
+        if postOnly:
+            options["postOnly"] = postOnly
 
+        return self.request("/api/v1/private/sell", options)
 
     def cancel(self, orderId):
         options = {
@@ -202,4 +215,3 @@ class RestClient(object):
             options["startTradeId"] = startTradeId
 
         return self.request("/api/v1/private/tradehistory", options)
-
