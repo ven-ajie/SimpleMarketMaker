@@ -16,7 +16,6 @@ KEY = 'AVmfiQceujWF'
 SECRET = '33WJ3QOFCBJMUB24OOYANJGWWSVG7RP5'
 URL = 'https://test.deribit.com'
 
-
 # Add command line switches
 parser = argparse.ArgumentParser(description='Bot')
 
@@ -222,10 +221,16 @@ class MarketMaker(object):
 				avg_price = 0
 			
 			spot = self.get_spot()
+			avg_price_fut_sell = sum([o['averagePrice'] for o in [o for o in self.client.positions () if o['direction'] == 'sell' and  o['currency'] == 'btc']])/len([o['averagePrice'] for o in [o for o in self.client.positions () if o['direction'] == 'sell' and  o['currency'] == 'btc']])
+			avg_price_fut_buy = sum([o['averagePrice'] for o in [o for o in self.client.positions () if o['direction'] == 'buy' and  o['currency'] == 'btc']])/len([o['averagePrice'] for o in [o for o in self.client.positions () if o['direction'] == 'buy' and  o['currency'] == 'btc']])
+			
+
+
 			
 			# Me
 			#BasicQty
-			instName 	= self.get_perpetual (fut) 
+			instName 	= self.get_perpetual (fut)
+			print(instName, avg_price_fut_sell ,instName, avg_price_fut_buy)
 			imb 		= self.get_bbo(fut)['imbalance']
 			posOpn 		= sum(OrderedDict({k: self.positions[k]['size'] for k 
 							in self.futures.keys()}).values())
@@ -234,16 +239,12 @@ class MarketMaker(object):
 			try:
 				last_price_buy1 = self.get_bbo(fut)['last_price_buy'][0] ['price'] 
 				last_price_sell1 = self.get_bbo(fut)['last_price_sell'][0] ['price'] 
-				diff_time 	= (self.client.gettime()/1000) - (self.get_bbo(fut)[
-							'last_price'][0] ['timeStamp']/1000
-							)
-			
+				diff_time_OB 	= (self.client.gettime()/1000) - (ords [0] ['created']/1000)
+							
+		
 			except:
 				last_price_buy1 = 0
 				last_price_sell1 = 0
-				diff_time = 31 # 31 > 30
-		
-			
 
 			last_buy 	= last_price_buy1 - (last_price_buy1*PCT/2)
 			last_sell 	= abs(last_price_sell1) + abs((last_price_sell1*PCT/2))
@@ -255,16 +256,17 @@ class MarketMaker(object):
 							o['direction'] == 'sell' and  
 								o['currency'] == fut[:3].lower()]]
 							)
-			posfutOrdAsk= sum([o['quantity'] for o in [o for o in self.client.getopenorders(fut) if 
+			posfutOrdAsk= sum([o['quantity'] for o in [o for o in self.client.getopenorders() if 
 							o['direction'] == 'sell' and  
 								o['api'] == True ]]
 							)
-			posfutOrdBid = sum([o['quantity'] for o in [o for o in self.client.getopenorders(fut) if 
-							o['direction'] == 'buy'and  
+			posfutOrdBid = sum([o['quantity'] for o in [o for o in self.client.getopenorders() if 
+							o['direction'] == 'buy' and  
 								o['api'] == True]]
 							)
 		
 			NetPosFut=(posFutBid+posfutAsk)
+			diffperpfut = self.client.getsummary(fut)['markPrice']-self.client.getsummary ('BTC-PERPETUAL')['markPrice']
 			PCTAdj = PCT/2 if instName [-9:] == 'PERPETUAL' else PCT/2 # 2 = arbitrase aja
 			PCTAdj0 = PCTAdj*1
 			PCTAdj1 = PCTAdj*1
@@ -272,7 +274,7 @@ class MarketMaker(object):
 			PCTAdj3 = PCTAdj*5
 			PCTAdj4 = PCTAdj*10
 			PCTAdj5 = PCTAdj*20
-  	
+                        
 			Margin          = avg_price * PCTAdj  
 			avg_priceAdj    = abs(avg_price) * (PCTAdj/2)  # up/down
 			avg_down        = abs(avg_price) - abs(avg_priceAdj/2)
@@ -360,51 +362,36 @@ class MarketMaker(object):
 
 				asks[0] = ticksize_ceil(asks[0], tsz)
 
+			
 			for i in range(max(nbids, nasks)):
 
-				#batalkan semua order bila ada eksekusi jual/bel1/kuantitas >1
-				if diff_time < 30 or posfutOrdAsk >1 or posfutOrdBid>1:
-					
-					while True:
-						self.client.cancelall()
-						sleep (20)
-						break   	
-				
-				print (instName)
-
-					# BIDS
+				# BIDS
 				if place_bids:
  
 					offerOB = bid_mkt
-					print ('avg_price',avg_price,'offerOB',offerOB,'posfutOrdBid',posfutOrdBid,'imb',imb)
 
 					# cek posisi awal
-					if avg_price == 0 and imb > 0 and abs(posfutOrdBid) < 2 :
+					if avg_price == 0 and imb > 0 and abs(posfutOrdBid) < 1 and abs(posFutBid/max(1,posfutAsk)) < 2:
 
 						# posisi baru mulai, order bila bid>ask 
-						
-						if instName [-9:] != 'PERPETUAL' and posFutBid <=0 :
+						if instName [-9:] != 'PERPETUAL' and posFutBid <= 0 :
 							prc = bid_mkt
+						
 
 						elif instName [-9:] == 'PERPETUAL' and (
 							abs (posfutAsk)>= qty_lvg0 ):
 							
-							prc = bid_mkt
-
+							prc = min(bid_mkt,avg_price_fut - (avg_price_fut*PCTAdj4 + diffperpfut))
 						else:
 							prc = 0
 					
 					# sudah ada short, ambil laba
-					elif avg_price < 0 and avg_price != 0 and abs(posfutOrdBid) < 2:
+					elif avg_price < 0 and avg_price != 0 and abs(posfutOrdBid) == 0:
 						prc = min(bid_mkt, abs(avg_down))
 
 					# average down pada harga < 5%, 10% & 20%
-					elif bid_mkt < avg_price and avg_price != 0 and abs(posfutOrdBid) < 2:
-						if posFutBid < qty_lvg0 * 3:
-							prc = min(bid_mkt, abs(avg_down3
-								), last_buy) if last_buy != 0 else min(
-									bid_mkt, abs(avg_down3))
-						elif  posFutBid < qty_lvg0 * 4:
+					elif bid_mkt < avg_price and avg_price != 0 and abs(posfutOrdBid) < 1 and posfutAsk !=0 and abs(posFutBid/max(1,posfutAsk)) < 2:
+						if  posFutBid < qty_lvg0 * 4:
 							prc = min(bid_mkt, abs(avg_down4
 								), last_buy) if last_buy != 0 else min(
 									bid_mkt, abs(avg_down4))
@@ -438,7 +425,7 @@ class MarketMaker(object):
 						except (SystemExit, KeyboardInterrupt):
 							raise
 						except Exception as e:
-							self.logger.warning('Bid order failed: '
+							self.logger.warning('Bid order failed: %s'% instName
 							                    )
 				else:
 					try:
@@ -446,48 +433,41 @@ class MarketMaker(object):
 					except (SystemExit, KeyboardInterrupt):
 						raise
 					except Exception as e:
-						self.logger.warning('Bid order failed')
+						self.logger.warning('Bid order failed %s'% instName)
 
 				# OFFERS
 
 				if place_asks:
 
 					offerOB = ask_mkt
-					print ('offerOB',offerOB,'abs(posfutAsk) ',abs(posfutAsk) ,'imb',imb)
-					print ('instName [-9:]',instName [-9:])
 
 					# cek posisi awal
-					if avg_price == 0 and imb <  0 and abs(posfutOrdAsk) < 2 :
+					if avg_price == 0 and imb <  0 and abs(posfutOrdAsk) < 1 and abs(posfutAsk/max (1,posFutBid)) <2:
 
 						# posisi baru mulai, order bila bid<ask (memperkecil resiko salah)
 						if instName [-9:] != 'PERPETUAL' and abs(posfutAsk) <= 0:
-							prc = bid_mkt
-							print ('!= PERPETUAL',prc)
 
+							prc = bid_mkt
+							
 						elif instName [-9:] == 'PERPETUAL' and (
 							abs (posFutBid)>= qty_lvg0):
-							prc = bid_mkt
-							print ('PERPETUAL',prc)
-
+							prc =  max(bid_mkt,avg_price_fut + (avg_price_fut*PCTAdj4 + diffperpfut))
+							
 						else:
 							prc = 0
-							print ('else',prc)
+							print ('prc avg_price == 0',prc)
 
 					# sudah ada long, ambil laba
 
 					elif avg_price > 0 and avg_price != 0 and abs(
-						posfutOrdAsk) < 2:
+						posfutOrdAsk) == 0:
 						prc = max(bid_mkt, abs(avg_up))
 						
 					# average up pada harga < 5%, 10% & 20%
 					elif bid_mkt > avg_price and avg_price != 0 and abs(
-						posfutOrdAsk) < 2:
+						posfutOrdAsk) < 1 and posFutBid !=0 and abs(posfutAsk/max (1,posFutBid)) <2:
 
-						if abs(posfutAsk) < qty_lvg0 * 3:
-								prc = max(bid_mkt, abs(avg_up3
-									), last_sell) if last_sell != 0 else max(
-										bid_mkt, abs(avg_up3))
-						elif abs(posfutAsk) < qty_lvg0 * 4:
+						if abs(posfutAsk) < qty_lvg0 * 4:
 							prc = max(bid_mkt, abs(avg_up4
 								), last_sell) if last_sell != 0 else max(
 									bid_mkt, abs(avg_up4))
@@ -520,7 +500,7 @@ class MarketMaker(object):
 						except (SystemExit, KeyboardInterrupt):
 							raise
 						except Exception as e:
-							self.logger.warning('Offer order failed: '
+							self.logger.warning('Offer order failed: %s'% instName
 							                    )
 
 				else:
@@ -529,7 +509,7 @@ class MarketMaker(object):
 					except (SystemExit, KeyboardInterrupt):
 						raise
 					except Exception as e:
-						self.logger.warning('Offer order failed: %s at %s'
+						self.logger.warning('Offer order failed: %s'% instName
 						                    )
 
 			if nbids > len(bid_ords):
@@ -543,7 +523,23 @@ class MarketMaker(object):
 					self.client.cancel(oid)
 				except:
 					self.logger.warning('Order cancellations failed: %s' % oid)
-	
+
+			#batalkan semua order bila ada eksekusi jual/bel1/kuantitas >1
+			diff_time_pos 	= (self.client.gettime()/1000)-(self.get_bbo(fut)['last_price'][0] ['timeStamp']/1000)
+				
+			try:
+				diff_time_OB 	= (self.client.gettime()/1000) - (ords [0] ['created']/1000)
+		
+			except:
+				diff_time_OB 	= 5
+
+			if diff_time_pos < 1 or posfutOrdAsk >1 or posfutOrdBid>1 or diff_time_OB > 5:
+				while True:
+					self.client.cancelall()
+					sleep (20)
+					break   		
+
+		
 
 	def restart(self):
 		try:
@@ -737,5 +733,4 @@ if __name__ == '__main__':
 		print(traceback.format_exc())
 		if args.restart:
 			mmbot.restart()
-
 
