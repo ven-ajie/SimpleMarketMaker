@@ -18,6 +18,15 @@ It is strongly recommended you to have coding and Python knowledge. Do not hesit
 - add/improve bot code related to e mail/time/telegram
 - not fully delta neutral yet (still holding significant position in one side)
 
+# Risk management:
+- Prioritise long over short (since short is a bit riskier). Short only for balancing (offsetted margin to avoid liquidation and allow higher long position)
+- Focus on protecting capital instead of making transactions
+- Cut loss?
+- Allow risk position update by e mail/telegram
+
+Basic premises:
+- All up, will be go down. And, vice versa
+- Profit is earned slowly. Rely on small but continuos 24 H transactions instead of big one time transaction
 
 
 
