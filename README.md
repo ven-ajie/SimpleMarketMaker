@@ -1,5 +1,5 @@
 # market maker-fee chaser
-Only for hobby/educational purposes: a semi-copy paste project from https://github.com/deribit/examples made by a non-programmer. USE THE SOFTWARE AT YOUR OWN RISK.
+Made by a non-programmer, only for hobby/educational purposes (a semi-copy paste project from https://github.com/deribit/examples). USE THE SOFTWARE AT YOUR OWN RISK.
 
 Always start by running a trading bot in test server and do not engage money before you understand how it works and what profit/loss you should expect. Do not hesitate to read the source code and understand the mechanism of this bot.
 
