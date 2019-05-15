@@ -25,8 +25,8 @@ Basic premises:
 - Profit is earned slowly. Rely on small but continuos 24 H transactions instead of big one time transaction
 
 # Test result:
-Tested 3 times in the last 6 months with real money. Actually, can generate decent profit in sideways market. But, finally, all got liquidated. Why?
-- Bot not prepared for significant price movement in BTC yet
+Tested 3 times in the last 6 months with real money. Actually, can generate decent profit in sideways market. However, all got liquidated at the end. Why?
+- Bot not prepared for significant price movement in BTC
 - Too tight leverage
 - Wrong balancing formula/not fully delta neutral yet (possible all long/short in the same time)
 
