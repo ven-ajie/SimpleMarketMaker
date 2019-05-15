@@ -16,6 +16,7 @@ KEY = 'AVmfiQceujWF'
 SECRET = '33WJ3QOFCBJMUB24OOYANJGWWSVG7RP5'
 URL = 'https://test.deribit.com'
 
+
 # Add command line switches
 parser = argparse.ArgumentParser(description='Bot')
 
@@ -216,17 +217,26 @@ class MarketMaker(object):
 					self.positions[fut]['size'] / abs(
 						self.positions[fut]['size'])
 							)
+				
+				avg_price_fut_sell 	= sum([o['averagePrice'] for o in [o for o in self.client.positions () if o[
+					'direction'] == 'sell' and  o['currency'] == 'btc']])/len([o['averagePrice'] for o in [
+					o for o in self.client.positions () if o['direction'] == 'sell' and  o['currency'] == 'btc']])
+
+				avg_price_fut_buy 	= sum([o['averagePrice'] for o in [o for o in self.client.positions () if o[
+					'direction'] == 'buy' and  o['currency'] == 'btc']])/len([o['averagePrice'] for o in [
+					o for o in self.client.positions () if o['direction'] == 'buy' and  o['currency'] == 'btc']])
+			
 				 
 			except:
 				avg_price = 0
+				avg_price_fut_sell = 1
+				avg_price_fut_buy = 1
 			
 			spot = self.get_spot()
-			avg_price_fut_sell = sum([o['averagePrice'] for o in [o for o in self.client.positions () if o['direction'] == 'sell' and  o['currency'] == 'btc']])/len([o['averagePrice'] for o in [o for o in self.client.positions () if o['direction'] == 'sell' and  o['currency'] == 'btc']])
-			avg_price_fut_buy = sum([o['averagePrice'] for o in [o for o in self.client.positions () if o['direction'] == 'buy' and  o['currency'] == 'btc']])/len([o['averagePrice'] for o in [o for o in self.client.positions () if o['direction'] == 'buy' and  o['currency'] == 'btc']])
-			
-
-
-			
+			print('test',sum([o['averagePrice'] for o in [o for o in self.client.positions () if o[
+					'direction'] == 'sell' and  o['currency'] == 'btc']]))
+			print ('test2',len([o['averagePrice'] for o in [
+					o for o in self.client.positions () if o['direction'] == 'sell' and  o['currency'] == 'btc']]))
 			# Me
 			#BasicQty
 			instName 	= self.get_perpetual (fut)
@@ -239,9 +249,7 @@ class MarketMaker(object):
 			try:
 				last_price_buy1 = self.get_bbo(fut)['last_price_buy'][0] ['price'] 
 				last_price_sell1 = self.get_bbo(fut)['last_price_sell'][0] ['price'] 
-				diff_time_OB 	= (self.client.gettime()/1000) - (ords [0] ['created']/1000)
 							
-		
 			except:
 				last_price_buy1 = 0
 				last_price_sell1 = 0
@@ -267,13 +275,13 @@ class MarketMaker(object):
 		
 			NetPosFut=(posFutBid+posfutAsk)
 			diffperpfut = self.client.getsummary(fut)['markPrice']-self.client.getsummary ('BTC-PERPETUAL')['markPrice']
-			PCTAdj = PCT/2 if instName [-9:] == 'PERPETUAL' else PCT/2 # 2 = arbitrase aja
-			PCTAdj0 = PCTAdj*1
-			PCTAdj1 = PCTAdj*1
-			PCTAdj2 = PCTAdj*2
-			PCTAdj3 = PCTAdj*5
-			PCTAdj4 = PCTAdj*10
-			PCTAdj5 = PCTAdj*20
+			PCTAdj = PCT
+			PCTAdj0 = PCT*1/2
+			PCTAdj1 = PCT*1
+			PCTAdj2 = PCT*2
+			PCTAdj5 = PCT*5
+			PCTAdj10 = PCT*10
+			PCTAdj20 = PCT*20
                         
 			Margin          = avg_price * PCTAdj  
 			avg_priceAdj    = abs(avg_price) * (PCTAdj/2)  # up/down
@@ -283,23 +291,23 @@ class MarketMaker(object):
 			avg_priceAdj0 = abs(avg_price) * PCTAdj0  # up/down, mengimbangi kenaikan/penurunan harga, arbitrase aja
 			avg_priceAdj1 = abs(avg_price) * PCTAdj1
 			avg_priceAdj2 = abs(avg_price) * PCTAdj2
-			avg_priceAdj3 = abs(avg_price) * PCTAdj3
-			avg_priceAdj4 = abs(avg_price) * PCTAdj4
 			avg_priceAdj5 = abs(avg_price) * PCTAdj5
+			avg_priceAdj10 = abs(avg_price) * PCTAdj10
+			avg_priceAdj20 = abs(avg_price) * PCTAdj20
 			
 			avg_down0 = abs(avg_price) - abs(avg_priceAdj0)
 			avg_down1 = abs(avg_price) - abs(avg_priceAdj1)
 			avg_down2 = abs(avg_price) - abs(avg_priceAdj2)
-			avg_down3 = abs(avg_price) - abs(avg_priceAdj3)
-			avg_down4 = abs(avg_price) - abs(avg_priceAdj4)
 			avg_down5 = abs(avg_price) - abs(avg_priceAdj5)
+			avg_down10 = abs(avg_price) - abs(avg_priceAdj10)
+			avg_down20 = abs(avg_price) - abs(avg_priceAdj20)
 
 			avg_up0 = abs(avg_price) + abs(avg_priceAdj0)
 			avg_up1 = abs(avg_price) + abs(avg_priceAdj1)
 			avg_up2 = abs(avg_price) + abs(avg_priceAdj2)
-			avg_up3 = abs(avg_price) + abs(avg_priceAdj3)
-			avg_up4 = abs(avg_price) + abs(avg_priceAdj4)
 			avg_up5 = abs(avg_price) + abs(avg_priceAdj5)
+			avg_up10 = abs(avg_price) + abs(avg_priceAdj10)
+			avg_up20 = abs(avg_price) + abs(avg_priceAdj20)
 
 			#Menghitung kuantitas beli/jual
 			# maks kuantitas by maks leverage
@@ -362,29 +370,34 @@ class MarketMaker(object):
 
 				asks[0] = ticksize_ceil(asks[0], tsz)
 
-			
-			for i in range(max(nbids, nasks)):
 
+			for i in range(max(nbids, nasks)):
+				print (instName)
+				print ('qty_lvg0',qty_lvg0)
+				print('avg_price_fut_buy',avg_price_fut_buy )
+				print('diffperpfut',diffperpfut )
 				# BIDS
 				if place_bids:
- 
+					
+					print ('avg_price_fut - (avg_price_fut*PCTAdj4 + diffperpfut', avg_price_fut_buy - (
+						avg_price_fut_buy*PCTAdj10 + diffperpfut))
+					
 					offerOB = bid_mkt
-
-					# cek posisi awal
+					
 					if avg_price == 0 and imb > 0 and abs(posfutOrdBid) < 1 and abs(posFutBid/max(1,posfutAsk)) < 2:
 
 						# posisi baru mulai, order bila bid>ask 
-						if instName [-9:] != 'PERPETUAL' and posFutBid <= 0 :
+						if instName [-10:] != 'CPERPETUAL' and posFutBid <= 0 :
 							prc = bid_mkt
-						
-
-						elif instName [-9:] == 'PERPETUAL' and (
-							abs (posfutAsk)>= qty_lvg0 ):
 							
-							prc = min(bid_mkt,avg_price_fut - (avg_price_fut*PCTAdj4 + diffperpfut))
+
+						elif instName [-10:] == 'CPERPETUAL' and (
+							abs (posfutAsk)>= qty_lvg0 ):
+								
+							prc = min(bid_mkt,avg_price_fut_buy - (avg_price_fut_buy*PCTAdj10 + diffperpfut))
 						else:
 							prc = 0
-					
+						
 					# sudah ada short, ambil laba
 					elif avg_price < 0 and avg_price != 0 and abs(posfutOrdBid) == 0:
 						prc = min(bid_mkt, abs(avg_down))
@@ -392,13 +405,13 @@ class MarketMaker(object):
 					# average down pada harga < 5%, 10% & 20%
 					elif bid_mkt < avg_price and avg_price != 0 and abs(posfutOrdBid) < 1 and posfutAsk !=0 and abs(posFutBid/max(1,posfutAsk)) < 2:
 						if  posFutBid < qty_lvg0 * 4:
-							prc = min(bid_mkt, abs(avg_down4
+							prc = min(bid_mkt, abs(avg_down10
 								), last_buy) if last_buy != 0 else min(
-									bid_mkt, abs(avg_down4))
+									bid_mkt, abs(avg_down10))
 						elif posFutBid < qty_lvg0 * 5:
-							prc = min(bid_mkt, abs(avg_down5
+							prc = min(bid_mkt, abs(avg_down20
 								), last_buy) if last_buy != 0 else  min(
-									bid_mkt, abs(avg_down5))
+									bid_mkt, abs(avg_down20))
 						else:
 							prc = 0
 
@@ -438,21 +451,26 @@ class MarketMaker(object):
 				# OFFERS
 
 				if place_asks:
-
+					print (instName)
+					print ('qty_lvg0',qty_lvg0)
+					print('avg_price_fut_sell',avg_price_fut_sell )
+					print('diffperpfut',diffperpfut )
 					offerOB = ask_mkt
+					print ('avg_price_fut_sell + (avg_price_fut_sell*PCTAdj4 + diffperpfut ', avg_price_fut_sell + (
+						avg_price_fut_sell*PCTAdj10 + diffperpfut))
 
 					# cek posisi awal
 					if avg_price == 0 and imb <  0 and abs(posfutOrdAsk) < 1 and abs(posfutAsk/max (1,posFutBid)) <2:
 
 						# posisi baru mulai, order bila bid<ask (memperkecil resiko salah)
-						if instName [-9:] != 'PERPETUAL' and abs(posfutAsk) <= 0:
+						if instName [-10:] != 'CPERPETUAL' and abs(posfutAsk) <= 0:
 
 							prc = bid_mkt
 							
-						elif instName [-9:] == 'PERPETUAL' and (
+						elif instName [-10:] == 'CPERPETUAL' and (
 							abs (posFutBid)>= qty_lvg0):
-							prc =  max(bid_mkt,avg_price_fut + (avg_price_fut*PCTAdj4 + diffperpfut))
-							
+							prc =  max(bid_mkt,avg_price_fut_sell + (avg_price_fut_sell*PCTAdj10 + diffperpfut))
+
 						else:
 							prc = 0
 							print ('prc avg_price == 0',prc)
@@ -468,13 +486,13 @@ class MarketMaker(object):
 						posfutOrdAsk) < 1 and posFutBid !=0 and abs(posfutAsk/max (1,posFutBid)) <2:
 
 						if abs(posfutAsk) < qty_lvg0 * 4:
-							prc = max(bid_mkt, abs(avg_up4
+							prc = max(bid_mkt, abs(avg_up10
 								), last_sell) if last_sell != 0 else max(
-									bid_mkt, abs(avg_up4))
+									bid_mkt, abs(avg_up10))
 						elif abs(posfutAsk) < qty_lvg0 * 5:
-							prc = max(bid_mkt, abs(avg_up5
+							prc = max(bid_mkt, abs(avg_up20
 								), last_sell) if last_sell != 0 else max(
-									bid_mkt, abs(avg_up5))
+									bid_mkt, abs(avg_up20))
 						else:
 							prc = 0
 				
@@ -533,11 +551,11 @@ class MarketMaker(object):
 			except:
 				diff_time_OB 	= 5
 
-			if diff_time_pos < 1 or posfutOrdAsk >1 or posfutOrdBid>1 or diff_time_OB > 5:
-				while True:
-					self.client.cancelall()
-					sleep (20)
-					break   		
+			#if diff_time_pos < 1 or posfutOrdAsk >1 or posfutOrdBid>1 or diff_time_OB > 5:
+			#	while True:
+			#		self.client.cancelall()
+			#		sleep (20)
+			#		break   		
 
 		
 
@@ -733,4 +751,5 @@ if __name__ == '__main__':
 		print(traceback.format_exc())
 		if args.restart:
 			mmbot.restart()
+
 
