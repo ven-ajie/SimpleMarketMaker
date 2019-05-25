@@ -212,75 +212,75 @@ class MarketMaker(object):
 		# fut	= INDIVIDUAL ITEM PER INSTRUMENT
 		# all	= TOTAL INDIVIDUAL ITEM PER INSTRUMENT PER DIRECTION
 			
-			instName 		= self.get_perpetual (fut)
-			imb 			= self.get_bbo(fut)['imbalance']
-			spot 			= self.get_spot()	
+			instName 			= self.get_perpetual (fut)
+			imb 				= self.get_bbo(fut)['imbalance']
+			spot 				= self.get_spot()	
 			
 			##determine various Qty variable 
 			#hold_fut 		= abs(self.positions[fut]['size'])#individual
-			hold_longItem	= len([o['averagePrice'] for o in [o for o in self.client.positions (
+			hold_longItem		= len([o['averagePrice'] for o in [o for o in self.client.positions (
 										) if o['direction'] == 'buy' and o['currency'] == fut[:3].lower()]])
-			hold_shortItem	= len([o['averagePrice'] for o in [o for o in self.client.positions (
+			hold_shortItem		= len([o['averagePrice'] for o in [o for o in self.client.positions (
 										) if o['direction'] == 'sell' and o['currency'] == fut[:3].lower()]])
-			hold_longAll 	= sum([o['size'] for o in [o for o in self.client.positions () if o[
+			hold_longQtyAll 	= sum([o['size'] for o in [o for o in self.client.positions () if o[
 								'direction'] == 'buy' and o['currency'] == fut[:3].lower()]])
-			hold_shortAll 	= sum([o['size'] for o in [o for o in self.client.positions () if o[
+			hold_shortQtyAll 	= sum([o['size'] for o in [o for o in self.client.positions () if o[
 								'direction'] == 'sell' and o['currency'] == fut[:3].lower()]])
-			#hold_netFut		= (hold_longAll+hold_shortAll)
+			#hold_netFut		= (hold_longQtyAll+hold_shortQtyAll)
 			
-			ord_longFut 	= sum([o['quantity'] for o in [o for o in self.client.getopenorders(
+			ord_longQtyFut 		= sum([o['quantity'] for o in [o for o in self.client.getopenorders(
 								) if o['direction'] == 'buy' and o['api'] == True and o[
 								'instrument'] == fut[:3].lower()]])
 
-			ord_shortFut	= sum([o['quantity'] for o in [o for o in self.client.getopenorders(
+			ord_shortQtyFut		= sum([o['quantity'] for o in [o for o in self.client.getopenorders(
 								) if o['direction'] == 'sell' and o['api'] == True and o[
 								'instrument'] == fut[:3].lower()]])
 
-			bal_btc         = self.client.account()[ 'equity' ]
-			qty_lvg			= max(1,round( (bal_btc * spot * 80)/10 * PCT,0)) # 100%-20%
+			bal_btc         	= self.client.account()[ 'equity' ]
+			qty_lvg				= max(1,round( (bal_btc * spot * 80)/10 * PCT,0)) # 100%-20%
 
 			#determine various price variable
-			hold_avgPrcFut 	= self.positions[fut]['averagePrice']*(self.positions[fut]['size'])/abs(
-								self.positions[fut]['size']) if self.positions[fut] ['size'] != 0 else 0
+			hold_avgPrcFut 		= self.positions[fut]['averagePrice']*(self.positions[fut]['size'])/abs(
+									self.positions[fut]['size']) if self.positions[fut] ['size'] != 0 else 0
+			hold_avgPrcShort	=  sum([o['averagePrice'] for o in [o for o in self.client.positions (
+										) if o['direction'] == 'sell' and o['currency'] == fut[:3].lower()]]
+										)
+			hold_avgQtyShort	=  len([o['averagePrice'] for o in [o for o in self.client.positions (
+										) if o['direction'] == 'sell' and o['currency'] == fut[:3].lower()]])
+			hold_avgPrcLong		=  sum([o['averagePrice'] for o in [o for o in self.client.positions (
+										) if o['direction'] == 'buy' and o['currency'] == fut[:3].lower()]]
+										)
+			hold_avgQtyLong		=  len([o['averagePrice'] for o in [o for o in self.client.positions (
+										) if o['direction'] == 'buy' and o['currency'] == fut[:3].lower()]])	
+			hold_avgPrcShortAll = 0 if hold_avgQtyShort == 0 else hold_avgPrcShort/hold_avgQtyShort
+			hold_avgPrcLongAll 	= 0 if hold_avgQtyLong == 0 else hold_avgPrcLong/hold_avgQtyLong	
+			
 			try:
-				hold_lastPriceBuy 	= min([o['price'] for o in [o for o in self.get_bbo(fut) [
+				hold_lastPrcBuy= min([o['price'] for o in [o for o in self.get_bbo(fut) [
 										'last_price_buy'] if o['instrument'] == instName]]) 
 
-				hold_lastPriceSell 	= max([o['price'] for o in [o for o in self.get_bbo(fut) [
+				hold_lastPrcSell= max([o['price'] for o in [o for o in self.get_bbo(fut) [
 										'last_price_sell'] if o['instrument'] == instName]]) 
-
-				hold_avgPrcShortAll =  sum([o['averagePrice'] for o in [o for o in self.client.positions (
-										) if o['direction'] == 'sell' and o['currency'] == fut[:3].lower()]]
-										)/len([o['averagePrice'] for o in [o for o in self.client.positions (
-										) if o['direction'] == 'sell' and o['currency'] == fut[:3].lower()]]) 
-
-				hold_avgPrcLongAll 	=  sum([o['averagePrice'] for o in [o for o in self.client.positions (
-										) if o['direction'] == 'buy' and o['currency'] == fut[:3].lower()]]
-										)/len([o['averagePrice'] for o in [o for o in self.client.positions (
-										) if o['direction'] == 'buy' and o['currency'] == fut[:3].lower()]])	
-							
 			except:
-				hold_lastPriceBuy 	= hold_avgPrcFut
-				hold_lastPriceSell 	= hold_avgPrcFut
-				hold_avgPrcShortAll = 0
-				hold_avgPrcLongAll 	= 0
-
+				hold_lastPrcBuy 	= hold_avgPrcFut
+				hold_lastPrcSell 	= hold_avgPrcFut
+				
 			diffperpfut 		= self.client.getsummary(fut)['markPrice'
 									]-self.client.getsummary ('BTC-PERPETUAL')['markPrice']
 			hold_avgPrcLongPerp	= hold_avgPrcLongAll - (hold_avgPrcLongAll*PCT*10 + diffperpfut)
 			hold_avgPrcShortPerp= hold_avgPrcShortAll + (hold_avgPrcShortAll*PCT*10 + diffperpfut)
 
-			avg_down0 			= abs(min(hold_lastPriceBuy,hold_avgPrcFut)) - abs(min(hold_avgPrcFut,hold_lastPriceBuy) * PCT/2)
+			avg_down0 			= abs(min(hold_lastPrcBuy,hold_avgPrcFut)) - abs(min(hold_avgPrcFut,hold_lastPrcBuy) * PCT/2)
 
-			avg_down2 			= abs(min(hold_lastPriceBuy,hold_avgPrcFut)) - abs(min(hold_lastPriceBuy,hold_avgPrcFut) * PCT * 2)
+			avg_down2 			= abs(min(hold_lastPrcBuy,hold_avgPrcFut)) - abs(min(hold_lastPrcBuy,hold_avgPrcFut) * PCT * 2)
 
-			avg_down20 			= abs(min(hold_lastPriceBuy,hold_avgPrcFut)) - abs(min(hold_lastPriceBuy,hold_avgPrcFut) * PCT * 20)
+			avg_down20 			= abs(min(hold_lastPrcBuy,hold_avgPrcFut)) - abs(min(hold_lastPrcBuy,hold_avgPrcFut) * PCT * 20)
 
-			avg_up0 			= abs(max(hold_lastPriceSell,hold_avgPrcFut)) + abs(max(hold_lastPriceSell,hold_avgPrcFut) * PCT/2)
+			avg_up0 			= abs(max(hold_lastPrcSell,hold_avgPrcFut)) + abs(max(hold_lastPrcSell,hold_avgPrcFut) * PCT/2)
 
-			avg_up2 			= abs(max(hold_lastPriceSell,hold_avgPrcFut)) + abs(max(hold_lastPriceSell,hold_avgPrcFut) * PCT * 2)
+			avg_up2 			= abs(max(hold_lastPrcSell,hold_avgPrcFut)) + abs(max(hold_lastPrcSell,hold_avgPrcFut) * PCT * 2)
 
-			avg_up20 			= abs(max(hold_lastPriceSell,hold_avgPrcFut)) + abs(max(hold_lastPriceSell,hold_avgPrcFut) * PCT * 20)
+			avg_up20 			= abs(max(hold_lastPrcSell,hold_avgPrcFut)) + abs(max(hold_lastPrcSell,hold_avgPrcFut) * PCT * 20)
 
 			#Menghitung kuantitas beli/jual
 			# maks kuantitas by maks leverage
@@ -344,10 +344,9 @@ class MarketMaker(object):
 				# BIDS
 				if place_bids:
 				
-					if hold_avgPrcFut == 0 and imb > 0 and abs(ord_longFut) < qty_lvg and hold_longItem <2 :
-
+					if hold_avgPrcFut == 0 and imb > 0 and abs(ord_longQtyFut) < qty_lvg and hold_longItem <2 :
 						# posisi baru mulai, order bila bid>ask 
-						if instName [-10:] != '-PERPETUAL' and hold_longAll <= 0 and ord_longFut ==0 :
+						if instName [-10:] != '-PERPETUAL' and hold_longQtyAll <= 0 and ord_longQtyFut ==0 :
 							prc = bid_mkt
 						
 						elif instName [-10:] == '-PERPETUAL' and hold_avgPrcLongAll !=0 :
@@ -362,15 +361,15 @@ class MarketMaker(object):
 						prc = min(bid_mkt, abs(avg_down0))
 
 					# average down pada harga < 5%, 10% & 20%
-					elif bid_mkt < hold_avgPrcFut and hold_avgPrcFut != 0 and abs(ord_longFut) < 1 and hold_shortAll !=0 :
+					elif bid_mkt < hold_avgPrcFut and hold_avgPrcFut != 0 and abs(ord_longQtyFut) < 1 and hold_shortQtyAll !=0 :
 
-						if  hold_longAll <= qty_lvg :
+						if  hold_longQtyAll <= qty_lvg :
 							prc = min(bid_mkt, abs(avg_down2))
 							
-						elif  hold_longAll < qty_lvg * 3 and instName [-10:] != '-PERPETUAL':
+						elif  hold_longQtyAll < qty_lvg * 3 and instName [-10:] != '-PERPETUAL':
 							prc = min(bid_mkt, abs(avg_down20))
 
-						elif  hold_longAll < qty_lvg * 4 and instName [-10:] == '-PERPETUAL':
+						elif  hold_longQtyAll < qty_lvg * 4 and instName [-10:] == '-PERPETUAL':
 							prc = min(bid_mkt, abs(avg_down20))
 			
 						else:
@@ -414,10 +413,10 @@ class MarketMaker(object):
 				if place_asks:
 
 					# cek posisi awal
-					if hold_avgPrcFut == 0 and imb <  0 and abs(ord_shortFut) < qty_lvg and hold_shortItem <2:
+					if hold_avgPrcFut == 0 and imb <  0 and abs(ord_shortQtyFut) < qty_lvg and hold_shortItem <2:
 
 						# posisi baru mulai, order bila bid<ask (memperkecil resiko salah)
-						if instName [-10:] != '-PERPETUAL' and abs(hold_shortAll) <= 0 and ord_shortFut ==0 :
+						if instName [-10:] != '-PERPETUAL' and abs(hold_shortQtyAll) <= 0 and ord_shortQtyFut ==0 :
 							prc = bid_mkt
 							
 						elif instName [-10:] == '-PERPETUAL' and hold_avgPrcShortAll !=0:
@@ -432,15 +431,15 @@ class MarketMaker(object):
 						
 					# average up pada harga < 5%, 10% & 20%
 					elif bid_mkt > hold_avgPrcFut and hold_avgPrcFut != 0 and abs(
-						ord_shortFut) < 1 and hold_longAll !=0 :
+						ord_shortQtyFut) < 1 and hold_longQtyAll !=0 :
 
-						if abs(hold_shortAll) <= qty_lvg:
+						if abs(hold_shortQtyAll) <= qty_lvg:
 							prc = max(bid_mkt, abs(avg_up2))
 						
-						elif abs(hold_shortAll) < qty_lvg * 3 and instName [-10:] != '-PERPETUAL':
+						elif abs(hold_shortQtyAll) < qty_lvg * 3 and instName [-10:] != '-PERPETUAL':
 							prc = max(bid_mkt, abs(avg_up20))
 						
-						elif abs(hold_shortAll) < qty_lvg * 4 and instName [-10:] == '-PERPETUAL':
+						elif abs(hold_shortQtyAll) < qty_lvg * 4 and instName [-10:] == '-PERPETUAL':
 							prc = max(bid_mkt, abs(avg_up20))
 						
 						else:
@@ -499,10 +498,10 @@ class MarketMaker(object):
 				hold_diffTime 	= (self.client.gettime()/1000)-(self.get_bbo(fut)['last_price'][0] ['timeStamp']/1000)
 		
 			except:
-				ord_diffTime 	= 19
+				ord_diffTime 	= 29
 				hold_diffTime	= 2
 
-			if hold_diffTime < 1 or ord_shortFut >2 or ord_longFut>2 or ord_diffTime > 20:
+			if hold_diffTime < 1 or ord_shortQtyFut >3 or ord_longQtyFut>3 or ord_diffTime > 30:
 				while True:
 					self.client.cancelall()
 					sleep (10)
@@ -555,7 +554,7 @@ class MarketMaker(object):
 			if self.output:
 				t_now = datetime.utcnow()
 				if (t_now - t_out).total_seconds() >= WAVELEN_OUT:
-					self.output_status();
+					self.output_status()
 					t_out = t_now
 
 			# Restart if file change detected
@@ -592,12 +591,12 @@ class MarketMaker(object):
 		# Get all futures contracts
 		self.get_futures()
 		self.this_mtime = getmtime(__file__)
-		self.symbols = [BTC_SYMBOL] + list(self.futures.keys());
+		self.symbols = [BTC_SYMBOL] + list(self.futures.keys())
 		self.symbols.sort()
 		self.deltas = OrderedDict({s: None for s in self.symbols})
 
 		# Create historical time series data for estimating vol
-		ts_keys = self.symbols + ['timestamp'];
+		ts_keys = self.symbols + ['timestamp']
 		ts_keys.sort()
 
 		self.ts = [
