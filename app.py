@@ -1,20 +1,25 @@
-
 from collections import OrderedDict
-from datetime import datetime
 from os.path import getmtime
 from time import sleep
 from datetime import datetime, timedelta
-from utils import (get_logger, print_dict_of_dicts, sort_by_key,
-                   ticksize_ceil, ticksize_floor)
-
 import copy as cp
 import argparse, logging, math, os, sys, time, traceback
+import requests
+import json
+import time
+import pandas as pd
+pd.options.mode.chained_assignment = None # This avoids SettingWithCopyWarnings
+import numpy as np
+from pandas_datareader import data as pdr
 
+from utils import (get_logger, print_dict_of_dicts, sort_by_key,
+                   ticksize_ceil, ticksize_floor)
 from api import RestClient
 
 KEY = 'AVmfiQceujWF'
 SECRET = '33WJ3QOFCBJMUB24OOYANJGWWSVG7RP5'
 URL = 'https://test.deribit.com'
+
 
 # Add command line switches
 parser = argparse.ArgumentParser(description='Bot')
@@ -41,7 +46,6 @@ parser.add_argument('--no-restart',
 
 args = parser.parse_args()
 
-
 BP = 1e-4  # one basis point
 BTC_SYMBOL = 'btc'
 CONTRACT_SIZE = 5  # USD
@@ -52,7 +56,6 @@ EWMA_WGT_LOOPTIME = 0.1  # parameter for EWMA looptime estimate
 FORECAST_RETURN_CAP = 20  # cap on returns for vol estimate
 LOG_LEVEL = logging.INFO
 MIN_ORDER_SIZE = 1
-
 MKT_IMPACT = 0.25  # base 1-sided spread between bid/offer
 NLAGS = 2  # number of lags in time series
 PCT = 100 * BP  # one percentage point
@@ -74,7 +77,6 @@ PCT_LIM_LONG *= PCT
 PCT_LIM_SHORT *= PCT
 PCT_QTY_BASE *= BP
 VOL_PRIOR *= PCT
-
 
 class MarketMaker(object):
 
@@ -199,20 +201,144 @@ class MarketMaker(object):
 
 		print('')
 
-	def place_orders(self):
+	
+	def ATR(self,df,n): #df is the DataFrame, n is the period 7,14 ,etc
+		df['H-L']=abs(df['high']-df['low'])
+		df['H-PC']=abs(df['high']-df['close'].shift(1))
+		df['L-PC']=abs(df['low']-df['close'].shift(1))
+		df['TR']=df[['H-L','H-PC','L-PC']].max(axis=1)
+		df['ATR']=np.nan
+		df.loc[n-1,'ATR']=df['TR'][:n-1].mean()
+		for i in range(n,len(df)):
+			df['ATR'][i]=(df['ATR'][i-1]*(n-1)+ df['TR'][i])/n
+		return 
+	#print (ATR,df,14)
+	
+	def HA(self,df):
+		df['HA_Close']=(df['open']+ df['high']+ df['low']+ df['close'])/4
+		 
+		df['HA_Open']=(df['open']+df['close'])/2   
 		
+		for i in range(1, len(df)):
+			df['HA_Open'][i]=(df['HA_Open'][i-1]+df['HA_Close'][i-1])/2 
+		df['HA_High']=df[['HA_Open','HA_Close','high']].max(axis=1)
+		df['HA_Low']=df[['HA_Open','HA_Close','low']].min(axis=1)
+		return
+
+	def MA(self,df):
+		# Tail-rolling average transform
+		df['MA']=df.set_index('ticks').rolling(2).mean()
+		
+		return
+
+
+	def ST(self,df,f,n): 
+	#df is the dataframe, n is the period, f is the factor; f=3, n=7 are commonly used.
+    #Calculation of SuperTrend. We are using Heiken_Ashi OHLC instead of regular OHLC data
+		df['Upper Basic']=(df['HA_High']+df['HA_Low'])/2+(f*df['ATR'])
+		df['Lower Basic']=(df['HA_High']+df['HA_Low'])/2-(f*df['ATR'])
+		df['Upper Band']=df['Upper Basic']
+		df['Lower Band']=df['Lower Basic']
+		for i in range(n,len(df)):
+			if df['HA_Close'][i-1]<=df['Upper Band'][i-1]:
+				df['Upper Band'][i]=min(df['Upper Basic'][i],df['Upper Band'][i-1])
+			else:
+				df['Upper Band'][i]=df['Upper Basic'][i]    
+		for i in range(n,len(df)):
+			if df['HA_Close'][i-1]>=df['Lower Band'][i-1]:
+				df['Lower Band'][i]=max(df['Lower Basic'][i],df['Lower Band'][i-1])
+			else:
+				df['Lower Band'][i]=df['Lower Basic'][i]   
+		df['SuperTrend']=np.nan
+		for i in df['SuperTrend']:
+			if df['HA_Close'][n-1]<=df['Upper Band'][n-1]:
+				df['SuperTrend'][n-1]=df['Upper Band'][n-1]
+			elif df['HA_Close'][n-1]>df['Upper Band'][i]:
+				df['SuperTrend'][n-1]=df['Lower Band'][n-1]
+		for i in range(n,len(df)):
+			if df['SuperTrend'][i-1]==df['Upper Band'][i-1] and df['HA_Close'][i]<=df['Upper Band'][i]:
+				df['SuperTrend'][i]=df['Upper Band'][i]
+			elif  df['SuperTrend'][i-1]==df['Upper Band'][i-1] and df['HA_Close'][i]>=df['Upper Band'][i]:
+				df['SuperTrend'][i]=df['Lower Band'][i]
+			elif df['SuperTrend'][i-1]==df['Lower Band'][i-1] and df['HA_Close'][i]>=df['Lower Band'][i]:
+				df['SuperTrend'][i]=df['Lower Band'][i]
+			elif df['SuperTrend'][i-1]==df['Lower Band'][i-1] and df['HA_Close'][i]<=df['Lower Band'][i]:
+				df['SuperTrend'][i]=df['Upper Band'][i]
+		return
+	
+	def SMA20(self,df, column="close", period=20):
+
+		df['SMA20'] = df[column].rolling(window=period, min_periods=period - 1).mean()
+		return
+	
+	def SMA10(self,df, column="close", period=10):
+
+		df['SMA10'] = df[column].rolling(window=period, min_periods=period - 1).mean()
+		return
+	
+	def SMAATR(self,df, column="ATR", period=20):
+
+		df['SMAATR'] = df[column].rolling(window=period, min_periods=period - 1).mean()
+		return
+
+	def RSI(self, df, column="close", period=14):
+    
+		delta = df[column].diff()
+		up, down = delta.copy(), delta.copy()
+
+		up[up < 0] = 0
+		down[down > 0] = 0
+
+		rUp = up.ewm(com=period - 1,  adjust=False).mean()
+		rDown = down.ewm(com=period - 1, adjust=False).mean().abs()
+
+		df ['RSI']= 100 - 100 / (1 + rUp / rDown)    
+
+		return
+
+	
+	
+	def DF(self, contract):
+		
+		RESOLUTION 	= 5 # time frame (in minutes or days =1D)
+		STOP_TIME 	= datetime.now()
+		START_TIME 	= datetime.now() - timedelta (days = 30, hours =24 )
+		start_unix 	= time.mktime(START_TIME.timetuple())*1000
+		stop_unix 	= time.mktime(STOP_TIME.timetuple())*1000
+
+		params 		= {
+						'instrument_name'	: contract,
+						'start_timestamp'	: int(start_unix),
+						'end_timestamp'		: int(stop_unix),
+						'resolution'		: RESOLUTION
+						}
+		
+		df 			= pd.DataFrame(requests.get(
+						'https://deribit.com/api/v2/public/get_tradingview_chart_data', 
+						params=params).json()['result']).drop(columns=['status'])
+		df.head()
+		
+		df['ticks'] = pd.to_datetime(df['ticks'],unit='ms')
+		
+		df.head()
+
+		return df
+	
+	def place_orders(self):
+	
 		if self.monitor:
 			return None
 	
 		for fut in self.futures.keys():
-		
-		# hold 	= ITEMS ON HAND
-		# ord	= ITEMS ON ORDER BOOK
-		# net	= LONG + SHORT
-		# fut	= INDIVIDUAL ITEM PER INSTRUMENT
-		# all	= TOTAL INDIVIDUAL ITEM PER INSTRUMENT PER DIRECTION
 			
 			instName 			= self.get_perpetual (fut)
+			
+			# hold 	= ITEMS ON HAND
+			# ord	= ITEMS ON ORDER BOOK
+			# net	= LONG + SHORT
+			# fut	= INDIVIDUAL ITEM PER INSTRUMENT
+			# all	= TOTAL INDIVIDUAL ITEM PER INSTRUMENT PER DIRECTION
+			
 			imb 				= self.get_bbo(fut)['imbalance']
 			spot 				= self.get_spot()	
 			
@@ -220,67 +346,64 @@ class MarketMaker(object):
 			#hold_fut 		= abs(self.positions[fut]['size'])#individual
 			hold_longItem		= len([o['averagePrice'] for o in [o for o in self.client.positions (
 										) if o['direction'] == 'buy' and o['currency'] == fut[:3].lower()]])
+			
 			hold_shortItem		= len([o['averagePrice'] for o in [o for o in self.client.positions (
 										) if o['direction'] == 'sell' and o['currency'] == fut[:3].lower()]])
+			
 			hold_longQtyAll 	= sum([o['size'] for o in [o for o in self.client.positions () if o[
-								'direction'] == 'buy' and o['currency'] == fut[:3].lower()]])
+										'direction'] == 'buy' and o['currency'] == fut[:3].lower()]])
+			
 			hold_shortQtyAll 	= sum([o['size'] for o in [o for o in self.client.positions () if o[
-								'direction'] == 'sell' and o['currency'] == fut[:3].lower()]])
+										'direction'] == 'sell' and o['currency'] == fut[:3].lower()]])
 			#hold_netFut		= (hold_longQtyAll+hold_shortQtyAll)
 			
 			ord_longQtyFut 		= sum([o['quantity'] for o in [o for o in self.client.getopenorders(
-								) if o['direction'] == 'buy' and o['api'] == True and o[
-								'instrument'] == fut[:3].lower()]])
+										) if o['direction'] == 'buy' and o['api'] == True and o[
+										'instrument'] == fut[:3].lower()]])
 
 			ord_shortQtyFut		= sum([o['quantity'] for o in [o for o in self.client.getopenorders(
-								) if o['direction'] == 'sell' and o['api'] == True and o[
-								'instrument'] == fut[:3].lower()]])
+										) if o['direction'] == 'sell' and o['api'] == True and o[
+										'instrument'] == fut[:3].lower()]])
 
 			bal_btc         	= self.client.account()[ 'equity' ]
 			qty_lvg				= max(1,round( (bal_btc * spot * 80)/10 * PCT,0)) # 100%-20%
 
 			#determine various price variable
 			hold_avgPrcFut 		= self.positions[fut]['averagePrice']*(self.positions[fut]['size'])/abs(
-									self.positions[fut]['size']) if self.positions[fut] ['size'] != 0 else 0
+										self.positions[fut]['size']) if self.positions[fut] ['size'] != 0 else 0
+			
 			hold_avgPrcShort	=  sum([o['averagePrice'] for o in [o for o in self.client.positions (
 										) if o['direction'] == 'sell' and o['currency'] == fut[:3].lower()]]
 										)
+			
 			hold_avgQtyShort	=  len([o['averagePrice'] for o in [o for o in self.client.positions (
 										) if o['direction'] == 'sell' and o['currency'] == fut[:3].lower()]])
+			
 			hold_avgPrcLong		=  sum([o['averagePrice'] for o in [o for o in self.client.positions (
 										) if o['direction'] == 'buy' and o['currency'] == fut[:3].lower()]]
 										)
+			
 			hold_avgQtyLong		=  len([o['averagePrice'] for o in [o for o in self.client.positions (
 										) if o['direction'] == 'buy' and o['currency'] == fut[:3].lower()]])	
+			
 			hold_avgPrcShortAll = 0 if hold_avgQtyShort == 0 else hold_avgPrcShort/hold_avgQtyShort
+			
 			hold_avgPrcLongAll 	= 0 if hold_avgQtyLong == 0 else hold_avgPrcLong/hold_avgQtyLong	
 			
 			try:
-				hold_lastPrcBuy= min([o['price'] for o in [o for o in self.get_bbo(fut) [
+				hold_lastPrcBuy	= min([o['price'] for o in [o for o in self.get_bbo(fut) [
 										'last_price_buy'] if o['instrument'] == instName]]) 
 
 				hold_lastPrcSell= max([o['price'] for o in [o for o in self.get_bbo(fut) [
 										'last_price_sell'] if o['instrument'] == instName]]) 
 			except:
-				hold_lastPrcBuy 	= hold_avgPrcFut
-				hold_lastPrcSell 	= hold_avgPrcFut
+				hold_lastPrcBuy = hold_avgPrcFut
+				hold_lastPrcSell= hold_avgPrcFut
 				
 			diffperpfut 		= self.client.getsummary(fut)['markPrice'
 									]-self.client.getsummary ('BTC-PERPETUAL')['markPrice']
 			hold_avgPrcLongPerp	= hold_avgPrcLongAll - (hold_avgPrcLongAll*PCT*10 + diffperpfut)
 			hold_avgPrcShortPerp= hold_avgPrcShortAll + (hold_avgPrcShortAll*PCT*10 + diffperpfut)
-
-			avg_down0 			= abs(min(hold_lastPrcBuy,hold_avgPrcFut)) - abs(min(hold_avgPrcFut,hold_lastPrcBuy) * PCT/2)
-
-			avg_down2 			= abs(min(hold_lastPrcBuy,hold_avgPrcFut)) - abs(min(hold_lastPrcBuy,hold_avgPrcFut) * PCT * 2)
-
-			avg_down20 			= abs(min(hold_lastPrcBuy,hold_avgPrcFut)) - abs(min(hold_lastPrcBuy,hold_avgPrcFut) * PCT * 20)
-
-			avg_up0 			= abs(max(hold_lastPrcSell,hold_avgPrcFut)) + abs(max(hold_lastPrcSell,hold_avgPrcFut) * PCT/2)
-
-			avg_up2 			= abs(max(hold_lastPrcSell,hold_avgPrcFut)) + abs(max(hold_lastPrcSell,hold_avgPrcFut) * PCT * 2)
-
-			avg_up20 			= abs(max(hold_lastPrcSell,hold_avgPrcFut)) + abs(max(hold_lastPrcSell,hold_avgPrcFut) * PCT * 20)
 
 			#Menghitung kuantitas beli/jual
 			# maks kuantitas by maks leverage
@@ -337,16 +460,64 @@ class MarketMaker(object):
 				asks = [ask0 * riskfac ** i for i in range(1, nasks + 1)]
 
 				asks[0] = ticksize_ceil(asks[0], tsz)
+			
+			#market condition
+			df = self.DF(fut)
+			RSI = ((pd.DataFrame(df,self.RSI(df)).tail (1)['RSI'].values))[0]
+			ATR = (pd.DataFrame(df ,self.ATR(df,14)).tail (1)['ATR'].values)[0]
+			SMA10 = (pd.DataFrame(df,self.SMA10(df)).tail (1)['SMA10'].values)[0]
+			bullish = RSI > 60 and SMA10 > bid_mkt
+			bear 	= RSI < 30 and SMA10 < bid_mkt
+			sideways= RSI > 30 and RSI < 60
+		
+			hold_diffTime 	= (self.client.gettime()/1000)-(self.get_bbo(fut)['last_price'][0] ['timeStamp']/1000)
 
+			try:
+				ord_diffTime 	= (self.client.gettime()/1000) - (ords [0] ['created']/1000)
+				
+		
+			except:
+				ord_diffTime 	= 29		
+	
+			actual_prcBuy		= abs(hold_lastPrcBuy) if hold_diffTime < 100 else abs(hold_avgPrcFut)
+			actual_prcSell		= abs(hold_lastPrcSell) if hold_diffTime < 100 else abs(hold_avgPrcFut)
+			
+			
+			avg_down0 			= min(abs(actual_prcBuy),abs(hold_avgPrcFut)) - abs(ATR/2) if sideways == True else min(
+									abs(actual_prcBuy),abs(hold_avgPrcFut)) - min(abs(actual_prcBuy),abs(hold_avgPrcFut)) * PCT/2
+			
+
+			avg_down2 			= abs(min(abs(actual_prcBuy),abs(hold_avgPrcFut))) - abs(min(abs(actual_prcBuy),abs(hold_avgPrcFut)) * PCT * 2)
+
+			avg_down20 			= abs(min(abs(actual_prcBuy),abs(hold_avgPrcFut))) - abs(min(abs(actual_prcBuy),abs(hold_avgPrcFut)) * PCT * 20)
+
+			avg_up0 			= max (abs(actual_prcSell),hold_avgPrcFut) + abs(ATR/2) if sideways == True else max (
+									actual_prcSell,hold_avgPrcFut) + max(abs(actual_prcSell),hold_avgPrcFut) * PCT/2
+			
+			print (instName,actual_prcBuy,actual_prcSell,hold_diffTime)
+			print 	('true',  max (abs(actual_prcSell),hold_avgPrcFut) )
+			print ('ATR',abs(ATR/2))
+			
+			print 	('true',  max (abs(actual_prcSell),hold_avgPrcFut) + abs(ATR/2))
+			print ('false',max (actual_prcSell,hold_avgPrcFut) + max(abs(actual_prcSell),hold_avgPrcFut) * PCT/2)		
+			print (instName, avg_up0 , bid_mkt, hold_avgPrcFut, ATR/2,sideways )
+
+			avg_up2 			= abs(max(abs(actual_prcSell),hold_avgPrcFut)) + abs(max(abs(actual_prcSell),hold_avgPrcFut) * PCT * 2)
+
+			avg_up20 			= abs(max(abs(actual_prcSell),hold_avgPrcFut)) + abs(max(abs(actual_prcSell),hold_avgPrcFut) * PCT * 20)
+			#export_excel = SMAATR.to_excel (r'C:\Users\agung\Documents\!project\data1.xlsx', index = None, header=True) 
 
 			for i in range(max(nbids, nasks)):
 
 				# BIDS
 				if place_bids:
-				
-					if hold_avgPrcFut == 0 and imb > 0 and abs(ord_longQtyFut) < qty_lvg and hold_longItem <2 :
+
+					if hold_avgPrcFut == 0 and imb > 0 and abs(ord_longQtyFut
+						) < qty_lvg and hold_longItem <2 :
+						
 						# posisi baru mulai, order bila bid>ask 
-						if instName [-10:] != '-PERPETUAL' and hold_longQtyAll <= 0 and ord_longQtyFut ==0 :
+						if instName [-10:] != '-PERPETUAL' and hold_longQtyAll <= 0 and ord_longQtyFut ==0 and (
+								bullish == True or sideways == True):
 							prc = bid_mkt
 						
 						elif instName [-10:] == '-PERPETUAL' and hold_avgPrcLongAll !=0 :
@@ -361,7 +532,8 @@ class MarketMaker(object):
 						prc = min(bid_mkt, abs(avg_down0))
 
 					# average down pada harga < 5%, 10% & 20%
-					elif bid_mkt < hold_avgPrcFut and hold_avgPrcFut != 0 and abs(ord_longQtyFut) < 1 and hold_shortQtyAll !=0 :
+					elif bid_mkt < hold_avgPrcFut and hold_avgPrcFut != 0 and abs(
+							ord_longQtyFut) < 1 and hold_shortQtyAll !=0 :
 
 						if  hold_longQtyAll <= qty_lvg :
 							prc = min(bid_mkt, abs(avg_down2))
@@ -413,10 +585,12 @@ class MarketMaker(object):
 				if place_asks:
 
 					# cek posisi awal
-					if hold_avgPrcFut == 0 and imb <  0 and abs(ord_shortQtyFut) < qty_lvg and hold_shortItem <2:
+					if hold_avgPrcFut == 0 and imb <  0 and abs(ord_shortQtyFut
+							) < qty_lvg and hold_shortItem <2 :
 
 						# posisi baru mulai, order bila bid<ask (memperkecil resiko salah)
-						if instName [-10:] != '-PERPETUAL' and abs(hold_shortQtyAll) <= 0 and ord_shortQtyFut ==0 :
+						if instName [-10:] != '-PERPETUAL' and abs(hold_shortQtyAll) <= 0 and ord_shortQtyFut ==0 and (
+								bear == True or sideways == True):
 							prc = bid_mkt
 							
 						elif instName [-10:] == '-PERPETUAL' and hold_avgPrcShortAll !=0:
@@ -469,7 +643,6 @@ class MarketMaker(object):
 						except Exception as e:
 							self.logger.warning('Offer order failed: %s'% instName
 							                    )
-
 				else:
 					try:
 						self.client.sell(fut, qty, prc, 'true')
@@ -478,28 +651,19 @@ class MarketMaker(object):
 					except Exception as e:
 						self.logger.warning('Offer order failed: %s'% instName
 						                    )
-
 			if nbids > len(bid_ords):
 				cancel_oids += [o['orderId'] for o in bid_ords[nbids:]]
 			if nasks > len(ask_ords):
-				cancel_oids += [o['orderId'] for o in ask_ords[nasks:]]
-				
-		
+				cancel_oids += [o['orderId'] for o in ask_ords[nasks:]]			
+	
 			for oid in cancel_oids:
 				try:
 					self.client.cancel(oid)
 				except:
 					self.logger.warning('Order cancellations failed: %s' % oid)
 
-			#cancell all orders when: any  executions on order book, item quantity outstanding on orderbook> 1, or > 10 seconds
-			
-			try:
-				ord_diffTime 	= (self.client.gettime()/1000) - (ords [0] ['created']/1000)
-				hold_diffTime 	= (self.client.gettime()/1000)-(self.get_bbo(fut)['last_price'][0] ['timeStamp']/1000)
-		
-			except:
-				ord_diffTime 	= 29
-				hold_diffTime	= 2
+			#cancell all orders when: any  executions on order book, 
+			# item quantity outstanding on orderbook> 1, or > 10 seconds
 
 			if hold_diffTime < 1 or ord_shortQtyFut >3 or ord_longQtyFut>3 or ord_diffTime > 30:
 				while True:
@@ -528,8 +692,7 @@ class MarketMaker(object):
 		self.output_status()
 
 		t_ts = t_out = t_loop = t_mtime = datetime.utcnow()
-
-				
+			
 		while True:
 
 			self.get_futures()
@@ -684,7 +847,6 @@ class MarketMaker(object):
 			v = w * v + (1 - w) * self.vols[s] ** 2
 
 			self.vols[s] = math.sqrt(v)
-
 
 if __name__ == '__main__':
 
