@@ -16,10 +16,12 @@ from utils import (get_logger, print_dict_of_dicts, sort_by_key,
                    ticksize_ceil, ticksize_floor)
 from api import RestClient
 
-KEY = 'AVmfiQceujWF'
-SECRET = '33WJ3QOFCBJMUB24OOYANJGWWSVG7RP5'
-URL = 'https://test.deribit.com'
 
+KEY = '4obaqvw182nm4'
+SECRET = 'EKDWCB3ICQYWTCHIF2AENWCSSIPIAHWU'
+URL = 'https://www.deribit.com'
+
+        
 
 # Add command line switches
 parser = argparse.ArgumentParser(description='Bot')
@@ -274,8 +276,16 @@ class MarketMaker(object):
 	def SMA10(self,df, column="close", period=10):
 
 		df['SMA10'] = df[column].rolling(window=period, min_periods=period - 1).mean()
+		return	
+    	
+        #cross SMA 10 & 20
+	def CSMA(self,df, column="close", period=10):
+
+		df['CSMA'] = df[column].rolling(window=period, min_periods=period - 1).mean(
+            )-df[column].rolling(window=period*2, min_periods=(period*2) - 1).mean()
 		return
-	
+		
+
 	def SMAATR(self,df, column="ATR", period=20):
 
 		df['SMAATR'] = df[column].rolling(window=period, min_periods=period - 1).mean()
@@ -340,7 +350,9 @@ class MarketMaker(object):
 			# all	= TOTAL INDIVIDUAL ITEM PER INSTRUMENT PER DIRECTION
 			
 			imb 				= self.get_bbo(fut)['imbalance']
-			spot 				= self.get_spot()	
+			spot 				= self.get_spot()
+			expi 				= self.futures[ fut ][ 'expi_dt' ]
+			test_mod 				= expi.month%2
 			
 			##determine various Qty variable 
 			#hold_fut 		= abs(self.positions[fut]['size'])#individual
@@ -408,8 +420,8 @@ class MarketMaker(object):
 			#Menghitung kuantitas beli/jual
 			# maks kuantitas by maks leverage
 			
-			nbids 				= 1
-			nasks 				= 1
+			nbids 				= 2
+			nasks 				= 2
 
 			place_bids = 'true'
 			place_asks = 'true'
@@ -465,10 +477,12 @@ class MarketMaker(object):
 			df = self.DF(fut)
 			RSI = ((pd.DataFrame(df,self.RSI(df)).tail (1)['RSI'].values))[0]
 			ATR = (pd.DataFrame(df ,self.ATR(df,14)).tail (1)['ATR'].values)[0]
-			SMA10 = (pd.DataFrame(df,self.SMA10(df)).tail (1)['SMA10'].values)[0]
-			bullish = RSI > 60 and SMA10 > bid_mkt
-			bear 	= RSI < 30 and SMA10 < bid_mkt
+			#SMA10 = (pd.DataFrame(df,self.SMA10(df)).tail (1)['SMA10'].values)[0]
+			CSMA = (pd.DataFrame(df,self.CSMA(df)).tail (1)['CSMA'].values)[0]
+			bullish =  CSMA > 1
+			bearish	=  CSMA < 1
 			sideways= RSI > 30 and RSI < 60
+            
 		
 			hold_diffTime 	= (self.client.gettime()/1000)-(self.get_bbo(fut)['last_price'][0] ['timeStamp']/1000)
 
@@ -493,14 +507,6 @@ class MarketMaker(object):
 
 			avg_up0 			= max (abs(actual_prcSell),hold_avgPrcFut) + abs(ATR/2) if sideways == True else max (
 									actual_prcSell,hold_avgPrcFut) + max(abs(actual_prcSell),hold_avgPrcFut) * PCT/2
-			
-			print (instName,actual_prcBuy,actual_prcSell,hold_diffTime)
-			print 	('true',  max (abs(actual_prcSell),hold_avgPrcFut) )
-			print ('ATR',abs(ATR/2))
-			
-			print 	('true',  max (abs(actual_prcSell),hold_avgPrcFut) + abs(ATR/2))
-			print ('false',max (actual_prcSell,hold_avgPrcFut) + max(abs(actual_prcSell),hold_avgPrcFut) * PCT/2)		
-			print (instName, avg_up0 , bid_mkt, hold_avgPrcFut, ATR/2,sideways )
 
 			avg_up2 			= abs(max(abs(actual_prcSell),hold_avgPrcFut)) + abs(max(abs(actual_prcSell),hold_avgPrcFut) * PCT * 2)
 
@@ -510,33 +516,44 @@ class MarketMaker(object):
 			for i in range(max(nbids, nasks)):
 
 				# BIDS
+                
+				#print (fut,CSMA,bullish,bearish,RSI)
 				if place_bids:
 
-					if hold_avgPrcFut == 0 and imb > 0 and abs(ord_longQtyFut
-						) < qty_lvg and hold_longItem <2 :
+					if hold_avgPrcFut == 0 and abs(ord_longQtyFut) < qty_lvg :
 						
 						# posisi baru mulai, order bila bid>ask 
-						if instName [-10:] != '-PERPETUAL' and hold_longQtyAll <= 0 and ord_longQtyFut ==0 and (
-								bullish == True or sideways == True):
+						if instName [-10:] != '-PERPETUAL' and ord_longQtyFut ==0 and bullish == True and test_mod == 1:
 							prc = bid_mkt
 						
 						elif instName [-10:] == '-PERPETUAL' and hold_avgPrcLongAll !=0 :
 							prc = min(bid_mkt,hold_avgPrcLongPerp)
 
 						else:
-							prc = 0
+							prc = None
 						
 					# sudah ada short, ambil laba
 					
-					elif hold_avgPrcFut < 0 and hold_avgPrcFut != 0:
-						prc = min(bid_mkt, abs(avg_down0))
+					elif hold_avgPrcFut < 0 :
+                        
+						print ('hold_avgPrcFut',hold_avgPrcFut)
+						if  sideways == True:
+							print ('sideways',sideways)
+							prc=min(bid_mkt, abs(hold_avgPrcFut))
+							
+						elif  bearish == True:
+							print ('bearish',bearish)
+							prc = min(bid_mkt, abs(avg_down0))
+									
+						else:
+							prc = None
 
 					# average down pada harga < 5%, 10% & 20%
 					elif bid_mkt < hold_avgPrcFut and hold_avgPrcFut != 0 and abs(
 							ord_longQtyFut) < 1 and hold_shortQtyAll !=0 :
 
-						if  hold_longQtyAll <= qty_lvg :
-							prc = min(bid_mkt, abs(avg_down2))
+						if  hold_longQtyAll <= qty_lvg and RSI > 60:
+							prc = min(bid_mkt, abs(avg_down0))
 							
 						elif  hold_longQtyAll < qty_lvg * 3 and instName [-10:] != '-PERPETUAL':
 							prc = min(bid_mkt, abs(avg_down20))
@@ -545,13 +562,13 @@ class MarketMaker(object):
 							prc = min(bid_mkt, abs(avg_down20))
 			
 						else:
-							prc = 0
+							prc = None
 
 					else:
-						prc = 0
+						prc = None
 					
 				else:
-					prc = 0
+					prc = None
 
 				qty = 1
 					
@@ -566,49 +583,54 @@ class MarketMaker(object):
 						try:
 							self.client.buy(fut, qty, prc, 'true')
 							cancel_oids.append(oid)
-							self.logger.warning('Edit failed for %s' % oid)
+							None#self.logger.warning('Edit failed for %s' % oid)
 						except (SystemExit, KeyboardInterrupt):
 							raise
 						except Exception as e:
-							self.logger.warning('Bid order failed: %s'% instName
-							                    )
+							None#self.logger.warning('Bid order failed: %s'% instName)
 				else:
 					try:
 						self.client.buy(fut, qty, prc, 'true')
 					except (SystemExit, KeyboardInterrupt):
 						raise
 					except Exception as e:
-						self.logger.warning('Bid order failed %s'% instName)
+						None#self.logger.warning('Bid order failed %s'% instName)
 
 				# OFFERS
 
 				if place_asks:
 
 					# cek posisi awal
-					if hold_avgPrcFut == 0 and imb <  0 and abs(ord_shortQtyFut
-							) < qty_lvg and hold_shortItem <2 :
+					if hold_avgPrcFut == 0 and abs(ord_shortQtyFut) < qty_lvg :
 
 						# posisi baru mulai, order bila bid<ask (memperkecil resiko salah)
-						if instName [-10:] != '-PERPETUAL' and abs(hold_shortQtyAll) <= 0 and ord_shortQtyFut ==0 and (
-								bear == True or sideways == True):
+						if instName [-10:] != '-PERPETUAL' and ord_shortQtyFut ==0 and bearish == True and test_mod == 0:
 							prc = bid_mkt
 							
 						elif instName [-10:] == '-PERPETUAL' and hold_avgPrcShortAll !=0:
 							prc =  max(bid_mkt,hold_avgPrcShortPerp)
 								
 						else:
-							prc = 0
+							prc = None
 					# sudah ada long, ambil laba
 					
-					elif hold_avgPrcFut > 0 and hold_avgPrcFut != 0 :
-						prc = max(bid_mkt, abs(avg_up0))
-						
+					elif hold_avgPrcFut > 0 :
+                      
+						if  sideways == True:
+							prc = max(bid_mkt, abs(hold_avgPrcFut))
+							
+						elif  bullish == True:
+							prc = max(bid_mkt, abs(avg_up0))
+									
+						else:
+							prc = None
+							
 					# average up pada harga < 5%, 10% & 20%
 					elif bid_mkt > hold_avgPrcFut and hold_avgPrcFut != 0 and abs(
 						ord_shortQtyFut) < 1 and hold_longQtyAll !=0 :
 
-						if abs(hold_shortQtyAll) <= qty_lvg:
-							prc = max(bid_mkt, abs(avg_up2))
+						if abs(hold_shortQtyAll) <= qty_lvg and RSI < 30:
+							prc = max(bid_mkt, abs(avg_up0))
 						
 						elif abs(hold_shortQtyAll) < qty_lvg * 3 and instName [-10:] != '-PERPETUAL':
 							prc = max(bid_mkt, abs(avg_up20))
@@ -617,13 +639,13 @@ class MarketMaker(object):
 							prc = max(bid_mkt, abs(avg_up20))
 						
 						else:
-							prc = 0
+							prc = None
 				
 					else:
-						prc = 0
+						prc = None
 				
 				else:
-					prc = 0
+					prc =None
 
 				qty = 1
 
@@ -637,20 +659,19 @@ class MarketMaker(object):
 						try:
 							self.client.sell(fut, qty, prc, 'true')
 							cancel_oids.append(oid)
-							self.logger.warning('Sell Edit failed for %s' % oid)
+							None#self.logger.warning('Sell Edit failed for %s' % oid)
 						except (SystemExit, KeyboardInterrupt):
 							raise
 						except Exception as e:
-							self.logger.warning('Offer order failed: %s'% instName
-							                    )
+							None#self.logger.warning('Offer order failed: %s'% instName)
 				else:
 					try:
 						self.client.sell(fut, qty, prc, 'true')
 					except (SystemExit, KeyboardInterrupt):
 						raise
 					except Exception as e:
-						self.logger.warning('Offer order failed: %s'% instName
-						                    )
+						None#self.logger.warning('Offer order failed: %s'% instName)
+
 			if nbids > len(bid_ords):
 				cancel_oids += [o['orderId'] for o in bid_ords[nbids:]]
 			if nasks > len(ask_ords):
@@ -660,16 +681,16 @@ class MarketMaker(object):
 				try:
 					self.client.cancel(oid)
 				except:
-					self.logger.warning('Order cancellations failed: %s' % oid)
+					None#self.logger.warning('Order cancellations failed: %s' % oid)
 
 			#cancell all orders when: any  executions on order book, 
 			# item quantity outstanding on orderbook> 1, or > 10 seconds
 
-			if hold_diffTime < 1 or ord_shortQtyFut >3 or ord_longQtyFut>3 or ord_diffTime > 30:
-				while True:
-					self.client.cancelall()
-					sleep (10)
-					break   		
+			#if hold_diffTime < 1 or ord_shortQtyFut >3 or ord_longQtyFut>3 or ord_diffTime > 30:
+			#	while True:
+			#		self.client.cancelall()
+			#		sleep (10)
+			#		break   		
 
 	def restart(self):
 		try:
